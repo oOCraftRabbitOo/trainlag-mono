@@ -839,28 +839,9 @@ enum PictureEntry {
     ChallengePicture(RawPicture),
 }
 
-#[allow(dead_code)]
 impl PictureEntry {
     fn new_profile(image: image::DynamicImage) -> Result<Self, image::ImageError> {
-        let (x, y, width, height) = if image.width() > image.height() {
-            (
-                (image.width() - image.height()) / 2,
-                0,
-                image.height(),
-                image.height(),
-            )
-        } else {
-            (
-                0,
-                (image.height() - image.width()) / 2,
-                image.width(),
-                image.width(),
-            )
-        };
-
-        let small = image
-            .crop_imm(x, y, width, height)
-            .resize(256, 256, FilterType::CatmullRom);
+        let small = image.thumbnail_exact(192, 192);
 
         Ok(Self::Profile {
             thumb: small.try_into()?,
