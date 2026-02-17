@@ -1,8 +1,8 @@
 [package]
 name = "truinlag"
 description = "a library and the engine for the trainlag game rust rewrite which will never be completed"
-version = "0.0.2"
-edition = "2021"
+version = "0.13.0"
+edition = "2024"
 authors = ["Nelio Zoller"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -26,6 +26,8 @@ image = "0.25"
 serialimage = "4.1"
 geo = { version = "0.30", features = ["serde"], optional = true }
 strsim = { version = "0.11", optional = true }
+log = { version = "0.4", optional = true }
+pretty_env_logger = { version = "0.5", optional = true }
 
 [features]
 build-binary = [
@@ -36,6 +38,8 @@ build-binary = [
   "bonsaidb",
   "geo",
   "strsim",
+  "log",
+  "pretty_env_logger",
 ]
 
 [[bin]]
