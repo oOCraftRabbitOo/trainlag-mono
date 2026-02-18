@@ -1,13 +1,14 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{runtime::RuntimeRequest, InternEngineCommand, SessionContext, TimerHook};
+use crate::{InternEngineCommand, SessionContext, TimerHook, runtime::RuntimeRequest};
 
 use super::{
-    challenge::{ChallengeEntry, InOpenChallenge},
     Config, DBEntry,
+    challenge::{ChallengeEntry, InOpenChallenge},
 };
 use chrono::{self, Duration as Dur};
 use geo::Distance;
+use log::{error, warn};
 use rand::{prelude::*, rng};
 use serde::{Deserialize, Serialize};
 use truinlag::{commands::Error, *};
@@ -438,7 +439,7 @@ impl TeamEntry {
         let centre_zone = match zone_entries.find(|z| z.zone == config.centre_zone) {
             Some(centre_zone) => centre_zone,
             None => {
-                eprintln!(
+                error!(
                     "Engine: EXTREMELY BAD ERROR: \
                     couldn't find centre zone during challenge selection, \
                     giving up"
@@ -472,7 +473,7 @@ impl TeamEntry {
                         Some(c) => Some(c),
                         None => {
                             if index >= 1 {
-                                eprintln!(
+                                warn!(
                                     "Engine: Failed to select {} \
                                         challenge for team {}, \
                                         trying with filter list {} instead",
@@ -725,7 +726,7 @@ impl TeamEntry {
             challenges.push(match select_challenge(filters, not_generated_filter, gc) {
                 Some(c) => c,
                 None => {
-                    eprintln!(
+                    error!(
                         "Engine: EXTREMELY BAD ERROR: couldn't generate any challenges for team {}, giving up.",
                         self.name
                     );

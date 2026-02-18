@@ -1,14 +1,14 @@
 use crate::{
-    engine,
+    PictureEntry, engine,
     error::{self, Result},
-    PictureEntry,
 };
 use async_broadcast as broadcast;
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{future::Future, marker::Unpin, path::Path};
 use tokio::{
     net, select,
-    sync::{mpsc, oneshot, Mutex},
+    sync::{Mutex, mpsc, oneshot},
     task::{JoinError, JoinHandle},
     time::Duration,
 };
@@ -168,13 +168,13 @@ pub async fn manager() -> Result<()> {
 
     let (oneshot_tx, oneshot_rx) = oneshot::channel::<()>();
 
-    println!("Manager: starting engine");
+    info!("Manager: starting engine");
     let engine_handle =
         tokio::spawn(
             async move { engine(mpsc_rx, broadcast_tx, oneshot_tx, mpsc_tx.clone()).await },
         );
 
-    println!("Manager: starting ctrlc");
+    info!("Manager: starting ctrlc");
     let ctrlc_tx = mpsc_tx_staller.clone();
     let ctrlc_handle = tokio::spawn(async move { ctrlc(ctrlc_tx).await });
 
@@ -194,7 +194,7 @@ pub async fn manager() -> Result<()> {
         env!("CARGO_PKG_VERSION")
     );
 
-    println!("Manager: binding to socket {}", socket);
+    info!("Manager: binding to socket {}", socket);
     let listener = net::UnixListener::bind(&socket).expect(
         "Manager: cannot bind to socket (maybe other instance running, truinlag improperly terminated, etc.)",
     );
@@ -223,7 +223,7 @@ pub async fn manager() -> Result<()> {
             Ok(())
         }
 
-        println!("Manager: starting to accept new connections");
+        info!("Manager: starting to accept new connections");
 
         loop {
             let stream = listener.accept().await;
@@ -233,13 +233,13 @@ pub async fn manager() -> Result<()> {
                     make_io_task(stream, mpsc_tx_staller.clone(), io_tasks_2.clone(), addr)
                         .await
                         .unwrap_or_else(|err| {
-                            eprintln!(
+                            error!(
                                 "Manager: Encountered an error creating new i/o task, continuing: {}",
                                 err
                             )
                         });
                 }
-                Err(err) => eprintln!(
+                Err(err) => error!(
                     "Manager: Error accepting new connection, continuing: {}",
                     err
                 ),
@@ -249,7 +249,7 @@ pub async fn manager() -> Result<()> {
 
     let wait_for_shutdown = async move {
         oneshot_rx.await.unwrap_or_else(|err| {
-            eprintln!(
+            info!(
                 "Manager: The engine dropped the oneshot_tx, shutting down: {}",
                 err
             )
@@ -258,45 +258,46 @@ pub async fn manager() -> Result<()> {
 
     select! {
         _ = accept_connections => {
-            eprintln!("Manager: The loop for accepting connections stopped (bad), shutting down");
+            error!("Manager: The loop for accepting connections stopped (bad), shutting down");
         }
         _ = wait_for_shutdown => {
-            eprintln!("Manager: shutdown triggered, stopping to accept connections");
+            info!("Manager: shutdown triggered, stopping to accept connections");
         }
     };
 
     let timeout_secs = 30;
-    println!("Manager: shutting down (timeout {}s)", timeout_secs);
+    let _ = ctrlc_cancel.send(());
+    info!("Manager: shutting down (timeout {}s)", timeout_secs);
 
     let await_io_tasks = async move {
         let mut io_tasks = io_tasks.lock().await;
 
-        println!("Manager: awaiting io tasks");
+        info!("Manager: awaiting io tasks");
 
         for task in io_tasks.iter_mut() {
             match task.await {
                 Ok(_) => {}
-                Err(err) => eprintln!("Manager: error joining io task: {}", err),
+                Err(err) => warn!("Manager: error joining io task: {}", err),
             }
         }
 
-        println!("Manager: awaiting engine");
+        info!("Manager: awaiting engine");
 
         match engine_handle.await {
-            Ok(res) => res.unwrap_or_else(|err| eprintln!("Manager: engine error: {}", err)),
-            Err(err) => eprintln!("Manager: engine panicked: {}", err),
+            Ok(res) => res.unwrap_or_else(|err| error!("Manager: engine error: {}", err)),
+            Err(err) => error!("Manager: engine panicked: {}", err),
         }
 
-        println!("Manager: awaiting ctrlc");
+        info!("Manager: awaiting ctrlc");
 
         ctrlc_handle
             .await
-            .unwrap_or_else(|err| eprint!("Manager: error awaiting ctrlc: {}", err));
+            .unwrap_or_else(|err| warn!("Manager: error awaiting ctrlc: {}", err));
     };
 
     let timeout = async move {
         tokio::time::sleep(Duration::from_secs(timeout_secs)).await;
-        eprintln!("Manager: could not await all tasks within three seconds, aborting")
+        warn!("Manager: could not await all tasks within three seconds, aborting")
     };
 
     select! {
@@ -304,13 +305,13 @@ pub async fn manager() -> Result<()> {
         _ = timeout => {}
     };
 
-    println!("Manager: removing socket file");
+    info!("Manager: removing socket file");
 
     tokio::fs::remove_file(socket)
         .await
         .expect("couldn't remove socket file while shutting down");
 
-    println!("cya");
+    info!("cya");
 
     Ok(())
 }
@@ -371,7 +372,10 @@ async fn engine(
                                     .await
                                     .unwrap(),
                                 Err(err) => {
-                                    eprintln!("Runtime: there was a problem executing raw loopback, sending shutdown signal: {}", err);
+                                    error!(
+                                        "Runtime: there was a problem executing raw loopback, sending shutdown signal: {}",
+                                        err
+                                    );
                                     sender.send(EngineSignal::Shutdown).await.unwrap()
                                 }
                             }
@@ -402,19 +406,19 @@ async fn engine(
                 if let Some(action) = response.broadcast_action {
                     let message = IOSignal::Command(ClientCommand::Broadcast(action));
                     if broadcast_handle.is_full() {
-                        println!(
+                        warn!(
                             "Engine: broadcast full, {} receivers",
                             broadcast_handle.receiver_count()
                         )
                     }
                     if let Err(err) = broadcast_handle.broadcast_direct(message).await {
-                        println!("{}: {}", SEND_ERROR, err);
+                        error!("{}: {}", SEND_ERROR, err);
                     };
                 }
                 channel.send(IOSignal::Command(ClientCommand::Response(ResponsePackage {
                     action: response.response_action,
                     id
-                }))).unwrap_or_else(|_err| println!("Engine: Couldn't send response to IO task, assuming client disconnect and continuing"));
+                }))).unwrap_or_else(|_err| warn!("Engine: Couldn't send response to IO task, assuming client disconnect and continuing"));
             }
             InternEngineResponse::DelayedLoopback(handle) => {
                 let task = tokio::spawn(async move {
@@ -430,7 +434,10 @@ async fn engine(
                                 .unwrap();
                         }
                         Err(err) => {
-                            eprintln!("Runtime: there was an error executing delayed loopback, sending shutdown: {}", err);
+                            error!(
+                                "Runtime: there was an error executing delayed loopback, sending shutdown: {}",
+                                err
+                            );
                             mpsc_sender.send(EngineSignal::Shutdown).await.unwrap();
                         }
                     }
@@ -487,12 +494,10 @@ async fn engine(
             EngineSignal::BroadcastRequest(oneshot_sender) => {
                 oneshot_sender
                     .send(broadcast_handle.new_receiver())
-                    .unwrap_or_else(move |_handle| {
-                        eprintln!("Engine: couldn't send broadcast handle")
-                    });
+                    .unwrap_or_else(move |_handle| warn!("Engine: couldn't send broadcast handle"));
             }
             EngineSignal::Shutdown => {
-                println!("Engine: shutdown signal received, awaiting tasks");
+                info!("Engine: shutdown signal received, awaiting tasks");
                 for (id, handle) in handles {
                     match id {
                         None => {
@@ -501,7 +506,7 @@ async fn engine(
                         Some(_) => handle.abort(),
                     }
                 }
-                println!("Engine: tasks awaited, breaking loop");
+                info!("Engine: tasks awaited, breaking loop");
                 break;
             }
             EngineSignal::RawLoopbackCommand(command) => {
@@ -518,13 +523,13 @@ async fn engine(
 
     oneshot_handle.send(()).expect("Engine: The oneshot channel should not close before something is sent, manager has no reason to drop it");
     if broadcast_handle.is_full() {
-        println!(
+        warn!(
             "Engine: broadcast full, {} receivers",
             broadcast_handle.receiver_count()
         )
     }
     let _schmeceiver = broadcast_handle.new_receiver(); //sending doesn't work otherwise
-    println!(
+    info!(
         "Engine: {} broadcast receivers",
         broadcast_handle.receiver_count()
     );
@@ -544,8 +549,8 @@ async fn io(
     addr: tokio::net::unix::SocketAddr,
 ) {
     use bytes::Bytes;
-    use futures::prelude::*;
     use futures::SinkExt;
+    use futures::prelude::*;
     use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 
     async fn engine_parser(
@@ -641,7 +646,7 @@ async fn io(
 
     match wrapper(tx, rx, stream).await {
         Ok(_) => {}
-        Err(err) => eprintln!("IO {:?}: {}", addr, err),
+        Err(err) => error!("IO {:?}: {}", addr, err),
     }
 }
 

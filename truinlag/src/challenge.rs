@@ -7,7 +7,7 @@ use bonsaidb::core::{
     },
 };
 use chrono::Datelike;
-use log::trace;
+use log::{error, trace};
 use rand::prelude::*;
 use rand::rng;
 use rand_distr::{Distribution, Normal};
@@ -91,7 +91,7 @@ impl ChallengeEntry {
                 if from.contents.minutes_to.contains_key(z) {
                     true
                 } else {
-                    eprintln!(
+                    error!(
                         "Engine: error while calculating distance to zone: \
                         zone {} (id: {}) doesn't have a distance \
                         to the zone with id {}, ignoring zone",
@@ -118,7 +118,7 @@ impl ChallengeEntry {
                 for s in self.sets.clone() {
                     sets.push({
                         let set = challenge_sets.iter().find(|c| c.id == s).ok_or_else(|| {
-                            eprintln!("Couldn't find ChallengeSet with id {} in db while making challenge with id {} sendable, maybe it was improperly removed?", s, id);
+                            error!("Couldn't find ChallengeSet with id {} in db while making challenge with id {} sendable, maybe it was improperly removed?", s, id);
                             commands::Error::InternalError})?; set.contents.to_sendable(set.id)});
                 }
                 sets
@@ -136,7 +136,7 @@ impl ChallengeEntry {
                 for s in self.zone.clone() {
                     zones.push({
                         let zone = zone_entries.iter().find(|z| z.id == s).ok_or_else(|| {
-                            eprintln!("Couldn't find zone with id {} in db, maybe it was improperly removed?", s);
+                            error!("Couldn't find zone with id {} in db, maybe it was improperly removed?", s);
                             commands::Error::InternalError})?; zone.contents.to_sendable(zone.id)});
                 }
                 zones
@@ -185,7 +185,7 @@ impl ChallengeEntry {
         // challenges with a random place, where a random zone is selected as well. A specialty of
         // Ortsspezifisch challenges is that they can have multiple zones. The closest is selected.
         if zone_db.is_empty() {
-            eprintln!(
+            error!(
                 "Engine: there are no zones in the database, \
                 pointcalc will not work as expected"
             );
@@ -219,13 +219,13 @@ impl ChallengeEntry {
                 Kaff => match self.zone.first() {
                     Some(id) => zone_db.get(*id),
                     None => {
-                        eprintln!("challenge with id {id} has invalid zone");
+                        error!("challenge with id {id} has invalid zone");
                         None
                     }
                 },
                 Ortsspezifisch => match self.closest_zone(&current_zone) {
                     None => {
-                        eprintln!("challenge with id {id} has invalid zones");
+                        error!("challenge with id {id} has invalid zones");
                         None
                     }
                     Some(zid) => zone_db.get(zid),
@@ -250,7 +250,7 @@ impl ChallengeEntry {
             },
         };
         if needs_zone && zone.is_none() {
-            eprintln!(
+            error!(
                 "something went wrong selecting zone for challenge with id {id}, \
                 omitting zone for pointcalc"
             )
@@ -262,8 +262,7 @@ impl ChallengeEntry {
         points += self.additional_points as i64;
         trace!(
             "adding additional points {} => {}",
-            self.additional_points,
-            points
+            self.additional_points, points
         );
         if let Some(kaffskala) = self.kaffskala {
             points += kaffskala as i64 * config.points_per_kaffness as i64;
@@ -290,7 +289,7 @@ impl ChallengeEntry {
                     .minutes_to
                     .get(&z.id)
                     .unwrap_or_else(|| {
-                        eprintln!(
+                        error!(
                             "Engine: Zone {} has no distance to zone {}, \
                             skipping distance calculation",
                             current_zone.id, z.id
@@ -360,7 +359,7 @@ impl ChallengeEntry {
                 // the regular points shouldn't include the fixed points, since the fixed points
                 // are intended to represent the value of the challenge as a whole.
                 points -= fixed_points;
-                eprintln!(
+                error!(
                     "Engine: challenge {} (id: {}) \
                     granted {} normal points but only {} fixed points, \
                     using normal points instead (total: {}).",

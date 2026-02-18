@@ -1,16 +1,17 @@
 use std::num::NonZeroU32;
 
 use crate::{
+    Config, EngineContext, InGame, PartialConfig, PastGame, PictureEntry, SessionContext,
     challenge::InOpenChallenge,
     runtime::{
         InternEngineCommand, InternEngineResponse, InternEngineResponsePackage, RuntimeRequest,
     },
     team::{PeriodContext, TeamEntry},
-    Config, EngineContext, InGame, PartialConfig, PastGame, PictureEntry, SessionContext,
 };
 use bonsaidb::core::schema::Collection;
 use chrono::Timelike;
 use geo::Distance;
+use log::{info, warn};
 use partially::Partial;
 use rand::{rng, seq::IteratorRandom};
 use serde::{Deserialize, Serialize};
@@ -337,7 +338,7 @@ impl Session {
                                                 return Error(TeamsTooFar).into();
                                             }
                                         } else {
-                                            eprintln!(
+                                            warn!(
                                                 "engine: session: no location for team {} or {}",
                                                 catcher_team.name, caught_team.name
                                             )
@@ -349,7 +350,7 @@ impl Session {
                                         };
                                     }
                                     TeamRole::Catcher => {
-                                        return Error(TeamIsCatcher(caught)).into()
+                                        return Error(TeamIsCatcher(caught)).into();
                                     }
                                 },
                                 None => {
@@ -357,14 +358,14 @@ impl Session {
                                         "caught team with id {}",
                                         caught
                                     )))
-                                    .into()
+                                    .into();
                                 }
                             },
                             TeamRole::Runner => return Error(TeamIsRunner(catcher)).into(),
                         }
                     }
                     None => {
-                        return Error(NotFound(format!("catcher team with id {}", catcher))).into()
+                        return Error(NotFound(format!("catcher team with id {}", catcher))).into();
                     }
                 };
                 let period_id;
@@ -375,7 +376,7 @@ impl Session {
                             .push(catcher_team.have_caught(bounty, caught, catcher, context));
                     }
                     None => {
-                        return Error(NotFound(format!("catcher team with id {}", catcher))).into()
+                        return Error(NotFound(format!("catcher team with id {}", catcher))).into();
                     }
                 }
                 match self.teams.get_mut(caught) {
@@ -383,7 +384,7 @@ impl Session {
                         caught_team.be_caught(catcher);
                     }
                     None => {
-                        return Error(NotFound(format!("caught team with id {}", caught))).into()
+                        return Error(NotFound(format!("caught team with id {}", caught))).into();
                     }
                 }
                 InternEngineResponsePackage {
@@ -508,7 +509,7 @@ impl Session {
 
     /// Corresponds to an `EngineAction` and starts the game
     fn start(&mut self, context: &mut SessionContext) -> InternEngineResponsePackage {
-        println!("starting game...");
+        info!("starting game...");
         match self.game {
             Some(_) => Error(GameInProgress).into(),
             None => {
@@ -733,7 +734,7 @@ impl Session {
                     let pfp =
                         tokio::task::block_in_place(|| PictureEntry::new_profile(picture.into()))
                             .map_err(|err| {
-                                eprintln!("Engine: couldn't convert picture: {}", err);
+                                warn!("Engine: couldn't convert picture: {}", err);
                                 PictureProblem
                             });
                     InternEngineCommand::MadeTeamProfile {

@@ -12,8 +12,9 @@ use bonsaidb::{
 use challenge::{ChallengeEntry, ChallengeSetEntry, InOpenChallenge};
 use error::Result;
 use image::imageops::FilterType;
+use log::error;
 use partially::Partial;
-use runtime::{manager, InternEngineCommand, RuntimeRequest};
+use runtime::{InternEngineCommand, RuntimeRequest, manager};
 use serde::{Deserialize, Serialize};
 use session::Session;
 use std::{collections::HashMap, ops::Range};
@@ -936,7 +937,10 @@ impl ZoneEntry {
         if zonic_kaffness > 0_f64 {
             zonic_kaffness as u64
         } else {
-            eprintln!("Engine: zonic kaffness for zone {} <= 0", self.zone);
+            error!(
+                "Engine: zonic kaffness for zone {} <= 0, using 0 instead",
+                self.zone
+            );
             0
         }
     }

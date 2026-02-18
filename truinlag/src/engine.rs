@@ -1,30 +1,31 @@
 use crate::{
+    ClonedDBEntry, DBMirror, EngineContext, EngineSchema, PastGame, PictureEntry, PlayerEntry,
+    TimerTracker, ZoneEntry,
     challenge::{ChallengeEntry, ChallengeSetEntry},
     runtime::{
         InternEngineCommand, InternEngineResponse, InternEngineResponsePackage, RuntimeRequest,
     },
     session::Session,
-    ClonedDBEntry, DBMirror, EngineContext, EngineSchema, PastGame, PictureEntry, PlayerEntry,
-    TimerTracker, ZoneEntry,
 };
 use bonsaidb::{
     core::{connection::StorageConnection, schema::SerializedCollection, transaction::Transaction},
     local::{
-        config::{self, Builder},
         AsyncDatabase, Database, Storage,
+        config::{self, Builder},
     },
 };
+use log::{error, info, warn};
 use std::{
     collections::HashMap,
     path::Path,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 use tokio::{
     sync::Notify,
-    time::{sleep, Duration},
+    time::{Duration, sleep},
 };
 use truinlag::{
     commands::{
@@ -51,8 +52,8 @@ where
         {
             Ok(()) => (),
             Err(err) => {
-                println!(
-                    "Engine: something went wrong during overwrite_in_transaction: {}",
+                error!(
+                    "Engine: something went wrong during overwrite_in_transaction in the autosave: {}",
                     err
                 );
                 ret = Err(err);
@@ -135,8 +136,8 @@ impl Engine {
     /// );
     /// ```
     pub fn init(storage_path: &Path) -> Self {
-        println!("Engine: initialising...");
-        println!("Engine: opening database...");
+        info!("Engine: initialising...");
+        info!("Engine: opening database...");
         let db = Storage::open(
             config::StorageConfiguration::new(storage_path)
                 .with_schema::<EngineSchema>()
@@ -153,21 +154,21 @@ impl Engine {
         //     .map(|doc| doc.header.id)
         //     .collect();
 
-        println!("Engine: loading challenges...");
+        info!("Engine: loading challenges...");
         let challenges = DBMirror::from_db(&db);
-        println!("Engine: loading challenge sets...");
+        info!("Engine: loading challenge sets...");
         let challenge_sets = DBMirror::from_db(&db);
-        println!("Engine: loading zones...");
+        info!("Engine: loading zones...");
         let zones = DBMirror::from_db(&db);
-        println!("Engine: loading sessions...");
+        info!("Engine: loading sessions...");
         let sessions: DBMirror<Session> = DBMirror::from_db(&db);
-        println!("Engine: loading players...");
+        info!("Engine: loading players...");
         let players = DBMirror::from_db(&db);
-        println!("Engine: loading past games...");
+        info!("Engine: loading past games...");
         let past_games = DBMirror::from_db(&db);
-        println!("Engine: loading pictures...");
+        info!("Engine: loading pictures...");
         let pictures = DBMirror::from_db(&db);
-        println!("Engine: done!");
+        info!("Engine: done!");
 
         // let sessionista = sessions.get_all();
         // for session in sessionista {
@@ -429,7 +430,7 @@ impl Engine {
                                 match transaction.apply_async(&db).await {
                                     Ok(_) => {}
                                     Err(err) => {
-                                        eprintln!(
+                                        error!(
                                             "Engine Autosave: \
                                             AUTOSAVE FAILED HIGH ALERT YOU ARE ALL FUCKED NOW \
                                             (in {} ms): {}",
@@ -460,7 +461,7 @@ impl Engine {
         };
         let duration = start_time.elapsed();
         if duration.as_millis() > 10 {
-            println!("A command took {}ms to complete.", duration.as_millis());
+            warn!("A command took {}ms to complete.", duration.as_millis());
         }
         response
     }
@@ -613,7 +614,7 @@ impl Engine {
                     if let Some(tbr_session) = old_session {
                         match self.sessions.get_mut(tbr_session) {
                             None => {
-                                println!(
+                                warn!(
                                     "Engine: couldn't find session with id {} of player {}",
                                     tbr_session, i_player.id
                                 )
@@ -767,7 +768,7 @@ impl Engine {
             Some(_player) => InternEngineResponse::DelayedLoopback(tokio::spawn(async move {
                 let pfp = tokio::task::block_in_place(|| PictureEntry::new_profile(picture.into()))
                     .map_err(|err| {
-                        eprintln!("Engine: couldn't convert picture: {}", err);
+                        error!("Engine: couldn't convert picture: {}", err);
                         PictureProblem
                     });
                 InternEngineCommand::MadePlayerProfile { player_id, pfp }
