@@ -176,7 +176,8 @@ pub async fn manager() -> Result<()> {
 
     info!("Manager: starting ctrlc");
     let ctrlc_tx = mpsc_tx_staller.clone();
-    let ctrlc_handle = tokio::spawn(async move { ctrlc(ctrlc_tx).await });
+    let (ctrlc_cancel, rx) = oneshot::channel();
+    let ctrlc_handle = tokio::spawn(async move { ctrlc(ctrlc_tx, rx).await });
 
     // I could have just used an mpsc channel I think. That's all I do with this mutex.
     // I dump the io task futures into there and then, later, I take them all out.
@@ -650,10 +651,12 @@ async fn io(
     }
 }
 
-async fn ctrlc(tx: mpsc::Sender<EngineSignal>) {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("should be able to await ctrl-c");
-    println!("ctrlc: received keyboard interrupt :))))");
-    let _ = tx.send(EngineSignal::Shutdown).await;
+async fn ctrlc(tx: mpsc::Sender<EngineSignal>, rx: oneshot::Receiver<()>) {
+    select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("ctrlc: received keyboard interrupt :))))");
+            let _ = tx.send(EngineSignal::Shutdown).await;
+        },
+        _ = rx => {}
+    }
 }
