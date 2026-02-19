@@ -11,7 +11,6 @@ use bonsaidb::{
 };
 use challenge::{ChallengeEntry, ChallengeSetEntry, InOpenChallenge};
 use error::Result;
-use image::imageops::FilterType;
 use log::error;
 use partially::Partial;
 use runtime::{InternEngineCommand, RuntimeRequest, manager};
@@ -422,14 +421,14 @@ where
     fn extract_changes(&mut self) -> Vec<ClonedDBEntry<T>> {
         let mut changes = Vec::new();
         for (index, entry) in &mut self.entries.iter_mut().enumerate() {
-            if let Some((item, status)) = entry {
-                if matches!(status, DBStatus::Edited) {
-                    changes.push(ClonedDBEntry {
-                        id: index as u64,
-                        contents: item.clone(),
-                    });
-                    *status = DBStatus::Unchanged;
-                }
+            if let Some((item, status)) = entry
+                && matches!(status, DBStatus::Edited)
+            {
+                changes.push(ClonedDBEntry {
+                    id: index as u64,
+                    contents: item.clone(),
+                });
+                *status = DBStatus::Unchanged;
             }
         }
         changes
@@ -438,10 +437,10 @@ where
     /// Confirms deletions.
     fn clear_pending_deletions(&mut self) {
         for entry in &mut self.entries {
-            if let Some((_, status)) = entry {
-                if matches!(status, DBStatus::BeingDeleted) {
-                    *entry = None;
-                }
+            if let Some((_, status)) = entry
+                && matches!(status, DBStatus::BeingDeleted)
+            {
+                *entry = None;
             }
         }
     }
@@ -450,11 +449,11 @@ where
     fn extract_deletions(&mut self) -> Vec<u64> {
         let mut deletions = Vec::new();
         for (index, entry) in &mut self.entries.iter_mut().enumerate() {
-            if let Some((_, status)) = entry {
-                if matches!(status, DBStatus::ToBeDeleted) {
-                    deletions.push(index as u64);
-                    *status = DBStatus::BeingDeleted;
-                }
+            if let Some((_, status)) = entry
+                && matches!(status, DBStatus::ToBeDeleted)
+            {
+                deletions.push(index as u64);
+                *status = DBStatus::BeingDeleted;
             }
         }
         deletions
