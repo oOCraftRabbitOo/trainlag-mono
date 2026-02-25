@@ -8,7 +8,10 @@ use crate::{
     session::Session,
 };
 use bonsaidb::{
-    core::{connection::StorageConnection, schema::SerializedCollection, transaction::Transaction},
+    core::{
+        connection::AsyncConnection, connection::StorageConnection, schema::SerializedCollection,
+        transaction::Transaction,
+    },
     local::{
         AsyncDatabase, Database, Storage,
         config::{self, Builder},
@@ -365,6 +368,10 @@ impl Engine {
                     self.pictures.clear_pending_deletions();
                     let picture_deletions = self.pictures.extract_deletions();
 
+                    let past_game_changes = self.past_games.extract_changes();
+                    self.past_games.clear_pending_deletions();
+                    let past_game_deletions = self.past_games.extract_deletions();
+
                     self.changes_since_save = false;
 
                     let autosave_in_progress = self.autosave_in_progress.clone();
@@ -426,6 +433,15 @@ impl Engine {
                                 )
                                 .await
                                 .unwrap();
+                                vec_overwrite_in_transaction(past_game_changes, &mut transaction)
+                                    .unwrap();
+                                vec_delete_in_transaction::<PastGame>(
+                                    past_game_deletions,
+                                    &mut transaction,
+                                    &db,
+                                )
+                                .await
+                                .unwrap();
 
                                 match transaction.apply_async(&db).await {
                                     Ok(_) => {}
@@ -438,6 +454,17 @@ impl Engine {
                                             err
                                         );
                                         panic!("autosave failed")
+                                    }
+                                }
+
+                                match db.compact().await {
+                                    Ok(_) => {}
+                                    Err(err) => {
+                                        error!(
+                                            "Engine Autosave: \
+                                            failed to compact the database: {}",
+                                            err
+                                        )
                                     }
                                 }
 
