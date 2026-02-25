@@ -10,8 +10,8 @@ use truinlag::{
 mod interactive;
 mod parsley;
 
-async fn run_command(command: EngineCommand, address: Option<String>) {
-    let (mut sender, _recvr) = connect(address.as_deref()).await.unwrap();
+async fn run_command(command: EngineCommand, address: String) {
+    let (mut sender, _recvr) = connect(Some(&address)).await.unwrap();
     match sender.send(command).await {
         Ok(response) => {
             eprintln!("{}", "Command executed successfully:".green().bold());
@@ -249,7 +249,7 @@ fn cli() -> Command {
         )
         .subcommand(
             Command::new("set_start_time")
-                .about("Set the start time of the next game")
+                .about("Set the start time of future games")
                 .arg(
                     Arg::new("Session ID")
                         .required(true)
@@ -268,7 +268,7 @@ fn cli() -> Command {
         )
         .subcommand(
             Command::new("set_end_time")
-                .about("Set the end time of the next game")
+                .about("Set the end time of future games")
                 .arg(
                     Arg::new("Session ID")
                         .required(true)
@@ -287,7 +287,7 @@ fn cli() -> Command {
         )
         .subcommand(
             Command::new("set_start_zone")
-                .about("Set the end time of the next game")
+                .about("Set the start zone of future games")
                 .arg(
                     Arg::new("Session ID")
                         .required(true)
@@ -301,7 +301,7 @@ fn cli() -> Command {
         )
         .subcommand(
             Command::new("set_num_catchers")
-                .about("Set the end time of the next game")
+                .about("Set the number of hunters in future games")
                 .arg(
                     Arg::new("Session ID")
                         .required(true)
@@ -315,7 +315,7 @@ fn cli() -> Command {
         )
         .subcommand(
             Command::new("set_challenge_sets")
-                .about("Set the end time of the next game")
+                .about("Set the challenge sets that are used in future games")
                 .arg(
                     Arg::new("Session ID")
                         .required(true)
@@ -328,19 +328,23 @@ fn cli() -> Command {
                         .value_parser(value_parser!(u64)),
                 ),
         )
+        .subcommand(
+            Command::new("print_address")
+                .about("print the socket address used to contact truinlag"),
+        )
 }
 
 #[tokio::main]
 async fn main() {
     let mut args = cli().get_matches();
     let generate_arg = args.contains_id("generate_zsh_completions");
-    let mut address = args.get_one("address").cloned();
+    let address = args.get_one("address").cloned();
     let release = args.contains_id("release");
-    address = address.or(Some(format!(
-        "truinsocket_{}{}",
+    let address = address.unwrap_or(format!(
+        "/tmp/truinsocket_{}{}",
         if release { "" } else { "dev_" },
         env!("CARGO_PKG_VERSION")
-    )));
+    ));
     let args = args.remove_subcommand();
     let (name, mut sub_args) = match args {
         None => {
@@ -355,6 +359,9 @@ async fn main() {
     };
 
     match name.as_str() {
+        "print_address" => {
+            println!("{}", address);
+        }
         "set_challenge_sets" => {
             let session = sub_args.remove_one::<u64>("Session ID");
             let sets = sub_args
@@ -377,7 +384,7 @@ async fn main() {
 
         "set_num_catchers" => {
             let session = sub_args.remove_one::<u64>("Session ID");
-            let num_catchers = sub_args.remove_one::<u64>("Zone").unwrap();
+            let num_catchers = sub_args.remove_one::<u64>("Number of hunters").unwrap();
             let config = PartialGameConfig {
                 num_catchers: Some(num_catchers),
                 ..Default::default()
@@ -544,7 +551,7 @@ async fn main() {
         }
 
         "import" => {
-            let (sender, _recvr) = connect(None).await.unwrap();
+            let (sender, _recvr) = connect(Some(&address)).await.unwrap();
             interactive::import_challenges(sender).await
         }
 
