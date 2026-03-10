@@ -823,6 +823,11 @@ impl Session {
         Success.into()
     }
 
+    fn remove_team(&mut self, team_id: usize) -> InternEngineResponsePackage {
+        self.teams.remove(team_id);
+        Success.into()
+    }
+
     /// The core method of the session that processes commands with sessions.
     ///
     /// The method takes a command to process, as well as a session id. This should be the id of
@@ -837,6 +842,7 @@ impl Session {
     ) -> InternEngineResponsePackage {
         let mut context = self.context(context, session_id);
         match command {
+            RemoveTeam(team_id) => self.remove_team(team_id),
             SetGameConfig(new_config) => self.set_game_config(new_config),
             GetGameConfig => self.send_game_config(),
             GetPastLocations {
@@ -925,6 +931,10 @@ impl Session {
             } => Error(SessionSupplied).into(),
             GetThumbnails(_) => Error(SessionSupplied).into(),
             GetPictures(_) => Error(SessionSupplied).into(),
+            RenamePlayer {
+                player_id: _,
+                new_name: _,
+            } => Error(SessionSupplied).into(),
         }
     }
 }

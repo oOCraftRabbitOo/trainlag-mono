@@ -845,8 +845,22 @@ impl Engine {
         .into()
     }
 
+    fn rename_player(&mut self, player_id: u64, new_name: String) -> InternEngineResponsePackage {
+        match self.players.get_mut(player_id) {
+            None => Error(NotFound(format!("player with id {}", player_id))).into(),
+            Some(player) => {
+                player.contents.name = new_name;
+                Success.into()
+            }
+        }
+    }
+
     fn handle_action(&mut self, action: EngineAction) -> InternEngineResponsePackage {
         match action {
+            RenamePlayer {
+                player_id,
+                new_name,
+            } => self.rename_player(player_id, new_name),
             GetPictures(ids) => self.get_pictures(ids),
             GetThumbnails(ids) => self.get_thumbnails(ids),
             UploadPlayerPicture { player_id, picture } => {
@@ -945,6 +959,7 @@ impl Engine {
             } => Error(NoSessionSupplied).into(),
             GetGameConfig => Error(NoSessionSupplied).into(),
             SetGameConfig(_) => Error(NoSessionSupplied).into(),
+            RemoveTeam(_) => Error(NoSessionSupplied).into(),
         }
     }
 }
