@@ -864,6 +864,7 @@ pub struct PlayerEntry {
     name: String,
     passphrase: String,
     discord_id: Option<u64>,
+    #[serde(default)]
     phone_number: Option<String>,
     session: Option<u64>,
 }
