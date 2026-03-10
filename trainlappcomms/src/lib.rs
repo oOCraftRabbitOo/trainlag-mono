@@ -34,6 +34,7 @@ pub enum ToServer {
         team_id: usize,
     },
     SetPhoneNumber(Option<String>),
+    SetTeamName(String),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

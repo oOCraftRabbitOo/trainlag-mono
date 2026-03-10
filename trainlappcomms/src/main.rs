@@ -252,6 +252,14 @@ fn to_server_to_engine_command(
 ) -> EngineCommandConversion {
     use ToServer::*;
     match to_server {
+        SetTeamName(name) => EngineCommand {
+            session: Some(session),
+            action: EngineAction::RenameTeam {
+                team: team_id,
+                new_name: name,
+            },
+        }
+        .into(),
         SetPhoneNumber(phone_number) => EngineCommand {
             session: None,
             action: EngineAction::SetPlayerPhoneNumber(player_id, phone_number),
