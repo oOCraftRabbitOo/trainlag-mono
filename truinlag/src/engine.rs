@@ -617,6 +617,7 @@ impl Engine {
         } else {
             self.players.add(PlayerEntry {
                 picture: None,
+                phone_number: None,
                 name,
                 discord_id,
                 passphrase,
@@ -855,8 +856,25 @@ impl Engine {
         }
     }
 
+    fn set_player_phone_number(
+        &mut self,
+        player_id: u64,
+        phone_number: Option<String>,
+    ) -> InternEngineResponsePackage {
+        match self.players.get_mut(player_id) {
+            None => Error(NotFound(format!("player with id {}", player_id))).into(),
+            Some(player) => {
+                player.contents.phone_number = phone_number;
+                Success.into()
+            }
+        }
+    }
+
     fn handle_action(&mut self, action: EngineAction) -> InternEngineResponsePackage {
         match action {
+            SetPlayerPhoneNumber(player_id, phone_number) => {
+                self.set_player_phone_number(player_id, phone_number)
+            }
             RenamePlayer {
                 player_id,
                 new_name,

@@ -3672,7 +3672,7 @@ dependencies = [
 
 [[package]]
 name = "trainlappcomms"
-version = "0.0.2"
+version = "0.13.0"
 dependencies = [
  "bincode",
  "chrono",
@@ -3682,7 +3682,7 @@ dependencies = [
  "serde",
  "tokio",
  "tokio-util",
- "truinlag 0.13.0 (git+https://github.com/oOCraftRabbitOo/truinlag)",
+ "truinlag",
 ]
 
 [[package]]
@@ -3726,7 +3726,7 @@ dependencies = [
  "reqwest",
  "serde",
  "tokio",
- "truinlag 0.13.0 (git+https://github.com/oOCraftRabbitOo/truinlag)",
+ "truinlag",
 ]
 
 [[package]]
@@ -3751,26 +3751,6 @@ dependencies = [
  "serde",
  "serialimage",
  "strsim 0.11.1",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
-name = "truinlag"
-version = "0.13.0"
-source = "git+https://github.com/oOCraftRabbitOo/truinlag#b80f8a69ca20243a46a7ddbc5e959b447f71e77f"
-dependencies = [
- "async-broadcast",
- "bincode",
- "bytes",
- "chrono",
- "futures",
- "image",
- "log",
- "partially",
- "pretty_env_logger",
- "serde",
- "serialimage",
  "tokio",
  "tokio-util",
 ]

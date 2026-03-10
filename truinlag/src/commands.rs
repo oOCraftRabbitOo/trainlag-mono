@@ -156,6 +156,7 @@ pub enum EngineAction {
         new_name: String,
     },
     RemoveTeam(usize),
+    SetPlayerPhoneNumber(u64, Option<String>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

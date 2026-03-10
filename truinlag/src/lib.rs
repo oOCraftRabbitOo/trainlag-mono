@@ -418,6 +418,7 @@ pub struct Player {
     pub id: u64,
     pub session: Option<u64>,
     pub picture_id: Option<u64>,
+    pub phone_number: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -33,6 +33,7 @@ pub enum ToServer {
         of_past_seconds: Option<NonZeroU32>,
         team_id: usize,
     },
+    SetPhoneNumber(Option<String>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -395,6 +396,7 @@ pub struct Player {
     pub name: String,
     pub id: u64,
     pub picture_id: Option<u64>,
+    pub phone_number: Option<String>,
 }
 
 #[cfg(feature = "build-binary")]
@@ -404,6 +406,7 @@ impl From<truinlag::Player> for Player {
             name: value.name,
             id: value.id,
             picture_id: value.picture_id,
+            phone_number: value.phone_number,
         }
     }
 }

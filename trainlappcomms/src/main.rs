@@ -252,6 +252,11 @@ fn to_server_to_engine_command(
 ) -> EngineCommandConversion {
     use ToServer::*;
     match to_server {
+        SetPhoneNumber(phone_number) => EngineCommand {
+            session: None,
+            action: EngineAction::SetPlayerPhoneNumber(player_id, phone_number),
+        }
+        .into(),
         Login(passphrase) => EngineCommand {
             session: None,
             action: EngineAction::GetPlayerByPassphrase(passphrase),

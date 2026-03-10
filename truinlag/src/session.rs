@@ -935,6 +935,7 @@ impl Session {
                 player_id: _,
                 new_name: _,
             } => Error(SessionSupplied).into(),
+            SetPlayerPhoneNumber(_, _) => Error(SessionSupplied).into(),
         }
     }
 }

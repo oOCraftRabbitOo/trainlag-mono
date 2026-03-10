@@ -864,6 +864,7 @@ pub struct PlayerEntry {
     name: String,
     passphrase: String,
     discord_id: Option<u64>,
+    phone_number: Option<String>,
     session: Option<u64>,
 }
 
@@ -875,6 +876,7 @@ impl PlayerEntry {
             session: self.session,
             id,
             picture_id: self.picture,
+            phone_number: self.phone_number.clone(),
         }
     }
 }
