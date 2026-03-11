@@ -1,8 +1,8 @@
 [package]
 name = "truinlag"
-description = "a library and the engine for the trainlag game rust rewrite which will never be completed"
-version = "0.13.0"
+description = "the engine for the trainlag game rust rewrite which has been completed and is live!"
 edition = "2024"
+version.workspace = true
 authors = ["Nelio Zoller"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -27,7 +27,3 @@ strsim = "0.11"
 log = "0.4"
 pretty_env_logger = "0.5"
 libtruinlag = { path = "../libtruinlag", features = ["with_geo"] }
-
-[[bin]]
-name = "truinlag"
-required-features = ["build-binary"]

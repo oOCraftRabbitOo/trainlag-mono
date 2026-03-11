@@ -1,3 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["truinlag", "trainlappcomms", "tredit", "libtruinlag", "libtlc"]
+
+[workspace.package]
+version = "0.13.0"
