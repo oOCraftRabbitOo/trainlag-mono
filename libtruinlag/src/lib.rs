@@ -92,6 +92,12 @@ impl From<RawPicture> for DynamicImage {
     }
 }
 
+impl From<RawPicture> for Vec<u8> {
+    fn from(value: RawPicture) -> Self {
+        value.data
+    }
+}
+
 impl RawPicture {
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, image::ImageError> {
         Self::from_img(image::load_from_memory_with_format(
