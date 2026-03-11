@@ -7,13 +7,13 @@ use bonsaidb::core::{
     },
 };
 use chrono::Datelike;
+use libtruinlag::*;
 use log::{error, trace};
 use rand::prelude::*;
 use rand::rng;
 use rand_distr::{Distribution, Normal};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use truinlag::*;
 
 /// The representation of a challenge set inside the db
 #[derive(Debug, Clone, Collection, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -604,8 +604,8 @@ impl InOpenChallenge {
     }
 
     /// Converts the engine-internal `InOpenChallenge` type into a sendable truinlag `Challenge` type
-    pub fn to_sendable(&self) -> truinlag::Challenge {
-        truinlag::Challenge {
+    pub fn to_sendable(&self) -> libtruinlag::Challenge {
+        libtruinlag::Challenge {
             title: self.title.clone(),
             points: self.points,
             description: self.description.clone(),

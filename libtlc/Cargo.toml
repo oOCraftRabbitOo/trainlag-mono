@@ -1,0 +1,16 @@
+[package]
+name = "libtlc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+bincode = { version = "1.3" }
+tokio = { version = "1", features = ["io-util", "net"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+libtruinlag = { path = "../libtruinlag" }
+futures = "0.3"
+
+[features]
+from = []

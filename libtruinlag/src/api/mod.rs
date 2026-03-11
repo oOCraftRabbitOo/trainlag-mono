@@ -5,11 +5,11 @@ use crate::commands::{
 use crate::*;
 use bytes::Bytes;
 use error::{Error, Result};
-use futures::prelude::*;
 use futures::SinkExt;
+use futures::prelude::*;
 use std::sync::Arc;
 use tokio::net::UnixStream;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 
 pub mod error;

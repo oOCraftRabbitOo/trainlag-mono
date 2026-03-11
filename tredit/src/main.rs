@@ -1,7 +1,7 @@
 use clap::{value_parser, Arg, ArgAction, Command};
 use clap_complete::{generate, shells::Zsh};
 use colored::Colorize;
-use truinlag::{
+use libtruinlag::{
     api::connect,
     commands::{EngineAction, EngineCommand},
     Challenge, PartialGameConfig,
@@ -679,7 +679,7 @@ async fn main() {
                     session: None,
                     action: EngineAction::AddSession {
                         name,
-                        mode: truinlag::Mode::Traditional,
+                        mode: libtruinlag::Mode::Traditional,
                     },
                 },
                 address,

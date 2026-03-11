@@ -3,6 +3,7 @@ use crate::{
     error::{self, Result},
 };
 use async_broadcast as broadcast;
+use libtruinlag::commands::{self, *};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{future::Future, marker::Unpin, path::Path};
@@ -12,7 +13,6 @@ use tokio::{
     task::{JoinError, JoinHandle},
     time::Duration,
 };
-use truinlag::commands::{self, *};
 
 #[derive(Debug)]
 pub enum EngineSignal {

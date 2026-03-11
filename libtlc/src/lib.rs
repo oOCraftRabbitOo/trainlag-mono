@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "build-binary")]
+#[cfg(feature = "from")]
 use chrono::Timelike;
 
 pub mod api;
@@ -125,11 +125,11 @@ impl std::fmt::Display for ClientError {
     }
 }
 
-#[cfg(feature = "build-binary")]
-impl TryFrom<truinlag::commands::Error> for ClientError {
+#[cfg(feature = "from")]
+impl TryFrom<libtruinlag::commands::Error> for ClientError {
     type Error = ();
-    fn try_from(value: truinlag::commands::Error) -> Result<Self, Self::Error> {
-        use truinlag::commands::Error::*;
+    fn try_from(value: libtruinlag::commands::Error) -> Result<Self, Self::Error> {
+        use libtruinlag::commands::Error::*;
         match value {
             NoSessionSupplied => Err(()),
             SessionSupplied => Err(()),
@@ -178,11 +178,11 @@ pub enum Event {
     },
 }
 
-#[cfg(feature = "build-binary")]
-impl From<truinlag::Event> for Event {
-    fn from(value: truinlag::Event) -> Self {
+#[cfg(feature = "from")]
+impl From<libtruinlag::Event> for Event {
+    fn from(value: libtruinlag::Event) -> Self {
         match value {
-            truinlag::Event::Complete {
+            libtruinlag::Event::Complete {
                 challenge,
                 completer_id,
                 time,
@@ -195,7 +195,7 @@ impl From<truinlag::Event> for Event {
                 picture_ids,
                 location: location.into(),
             },
-            truinlag::Event::Catch {
+            libtruinlag::Event::Catch {
                 catcher_id,
                 caught_id,
                 bounty,
@@ -221,9 +221,9 @@ pub struct JuhuiPicture {
     pub id: u64,
 }
 
-#[cfg(feature = "build-binary")]
-impl From<truinlag::Picture> for JuhuiPicture {
-    fn from(value: truinlag::Picture) -> Self {
+#[cfg(feature = "from")]
+impl From<libtruinlag::Picture> for JuhuiPicture {
+    fn from(value: libtruinlag::Picture) -> Self {
         JuhuiPicture {
             data: value.data.get_bytes(),
             is_thumbnail: value.is_thumbnail,
@@ -252,10 +252,10 @@ pub struct DetailedLocation {
     pub timestamp: i64,
 }
 
-#[cfg(feature = "build-binary")]
-impl From<DetailedLocation> for truinlag::DetailedLocation {
+#[cfg(feature = "from")]
+impl From<DetailedLocation> for libtruinlag::DetailedLocation {
     fn from(val: DetailedLocation) -> Self {
-        truinlag::DetailedLocation {
+        libtruinlag::DetailedLocation {
             latitude: val.latitude,
             longitude: val.longitude,
             accuracy: val.accuracy,
@@ -266,9 +266,9 @@ impl From<DetailedLocation> for truinlag::DetailedLocation {
     }
 }
 
-#[cfg(feature = "build-binary")]
-impl From<truinlag::DetailedLocation> for DetailedLocation {
-    fn from(value: truinlag::DetailedLocation) -> Self {
+#[cfg(feature = "from")]
+impl From<libtruinlag::DetailedLocation> for DetailedLocation {
+    fn from(value: libtruinlag::DetailedLocation) -> Self {
         Self {
             latitude: value.latitude,
             longitude: value.longitude,
@@ -287,10 +287,10 @@ pub struct MinimalLocation {
     pub timestamp: i64,
 }
 
-#[cfg(feature = "build-binary")]
-impl From<MinimalLocation> for truinlag::MinimalLocation {
+#[cfg(feature = "from")]
+impl From<MinimalLocation> for libtruinlag::MinimalLocation {
     fn from(val: MinimalLocation) -> Self {
-        truinlag::MinimalLocation {
+        libtruinlag::MinimalLocation {
             latitude: val.latitude,
             longitude: val.longitude,
             timestamp: val.timestamp,
@@ -298,9 +298,9 @@ impl From<MinimalLocation> for truinlag::MinimalLocation {
     }
 }
 
-#[cfg(feature = "build-binary")]
-impl From<truinlag::MinimalLocation> for MinimalLocation {
-    fn from(value: truinlag::MinimalLocation) -> Self {
+#[cfg(feature = "from")]
+impl From<libtruinlag::MinimalLocation> for MinimalLocation {
+    fn from(value: libtruinlag::MinimalLocation) -> Self {
         Self {
             latitude: value.latitude,
             longitude: value.longitude,
@@ -326,12 +326,12 @@ pub struct Team {
     pub period_id: usize,
 }
 
-#[cfg(feature = "build-binary")]
-impl From<truinlag::Team> for Team {
-    fn from(value: truinlag::Team) -> Self {
+#[cfg(feature = "from")]
+impl From<libtruinlag::Team> for Team {
+    fn from(value: libtruinlag::Team) -> Self {
         Self {
             colour: (value.colour.r, value.colour.g, value.colour.b),
-            is_catcher: matches!(value.role, truinlag::TeamRole::Catcher),
+            is_catcher: matches!(value.role, libtruinlag::TeamRole::Catcher),
             name: value.name,
             id: value.id,
             picture_id: value.picture_id,
@@ -359,9 +359,9 @@ pub struct Challenge {
     // pub attached_images: Vec<String>,
 }
 
-#[cfg(feature = "build-binary")]
-impl From<truinlag::Challenge> for Challenge {
-    fn from(challenge: truinlag::Challenge) -> Self {
+#[cfg(feature = "from")]
+impl From<libtruinlag::Challenge> for Challenge {
+    fn from(challenge: libtruinlag::Challenge) -> Self {
         Challenge {
             title: challenge.title,
             description: challenge.description,
@@ -379,9 +379,9 @@ pub struct CompletedChallenge {
     pub time: chrono::NaiveTime,
 }
 
-#[cfg(feature = "build-binary")]
-impl From<truinlag::CompletedChallenge> for CompletedChallenge {
-    fn from(value: truinlag::CompletedChallenge) -> Self {
+#[cfg(feature = "from")]
+impl From<libtruinlag::CompletedChallenge> for CompletedChallenge {
+    fn from(value: libtruinlag::CompletedChallenge) -> Self {
         Self {
             picture_ids: value.picture_ids,
             title: value.title,
@@ -400,9 +400,9 @@ pub struct Player {
     pub phone_number: Option<String>,
 }
 
-#[cfg(feature = "build-binary")]
-impl From<truinlag::Player> for Player {
-    fn from(value: truinlag::Player) -> Self {
+#[cfg(feature = "from")]
+impl From<libtruinlag::Player> for Player {
+    fn from(value: libtruinlag::Player) -> Self {
         Self {
             name: value.name,
             id: value.id,

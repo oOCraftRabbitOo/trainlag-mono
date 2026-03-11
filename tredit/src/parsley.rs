@@ -1,10 +1,9 @@
 use anyhow::Context;
+use libtruinlag::{
+    ChallengeSet, ChallengeStatus, ChallengeType, InputChallenge, RandomPlaceType, TextError, Zone,
+};
 use std::collections::HashMap;
 use std::str::FromStr;
-use truinlag::{
-    self, ChallengeSet, ChallengeStatus, ChallengeType, InputChallenge, RandomPlaceType, TextError,
-    Zone,
-};
 
 pub async fn get_data(url: &str) -> Vec<HashMap<String, String>> {
     let mut records = Vec::new();

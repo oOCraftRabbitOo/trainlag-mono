@@ -8,10 +8,10 @@ use super::{
 };
 use chrono::{self, Duration as Dur};
 use geo::Distance;
+use libtruinlag::{commands::Error, *};
 use log::{error, warn};
 use rand::{prelude::*, rng};
 use serde::{Deserialize, Serialize};
-use truinlag::{commands::Error, *};
 
 /// The representation of a team in a running or future game in the db
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,8 +127,8 @@ impl TeamEntry {
     }
 
     /// Converts the engine-internal `TeamEntry` type into a sendable truinlag `Team` type
-    pub fn to_sendable(&self, index: usize, context: &SessionContext) -> truinlag::Team {
-        truinlag::Team {
+    pub fn to_sendable(&self, index: usize, context: &SessionContext) -> libtruinlag::Team {
+        libtruinlag::Team {
             colour: self.colour,
             role: self.role,
             name: self.name.clone(),

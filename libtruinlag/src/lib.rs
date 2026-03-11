@@ -3,7 +3,9 @@ use partially::Partial;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
+#[cfg(feature = "api")]
 pub mod api;
+
 pub mod commands;
 
 type Timestamp = i64;
@@ -38,7 +40,7 @@ pub struct MinimalLocation {
     pub timestamp: Timestamp,
 }
 
-#[cfg(feature = "build-binary")]
+#[cfg(feature = "with_geo")]
 impl MinimalLocation {
     pub fn as_point(&self) -> geo::Point<f64> {
         geo::Point::from((self.latitude as f64, self.longitude as f64))

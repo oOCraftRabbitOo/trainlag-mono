@@ -1,16 +1,14 @@
-#![cfg(feature = "build-binary")]
-
 use futures::prelude::*;
+use libtlc::*;
+use libtruinlag::TeamRole;
+use libtruinlag::commands::{BroadcastAction, EngineAction, EngineCommand, ResponseAction};
+use libtruinlag::{RawPicture, api};
 use std::error::Error;
 use tokio::io::AsyncReadExt;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
-use trainlappcomms::*;
-use truinlag::commands::{BroadcastAction, EngineAction, EngineCommand, ResponseAction};
-use truinlag::TeamRole;
-use truinlag::{api, RawPicture};
 
 async fn get_everything(
     player_id: u64,
@@ -389,7 +387,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
         value: bool,
     ) {
         tx.send(
-            bincode::serialize(&trainlappcomms::ToApp::LoginSuccessful(value))
+            bincode::serialize(&libtlc::ToApp::LoginSuccessful(value))
                 .unwrap()
                 .into(),
         )
@@ -397,10 +395,9 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
         .unwrap();
     }
     let (player_id, session, team_id) = loop {
-        if let ToServer::Login(passphrase) = bincode::deserialize::<trainlappcomms::ToServer>(
-            &transport_rx.next().await.unwrap().unwrap(),
-        )
-        .unwrap()
+        if let ToServer::Login(passphrase) =
+            bincode::deserialize::<libtlc::ToServer>(&transport_rx.next().await.unwrap().unwrap())
+                .unwrap()
         {
             println!("TLC: App trying to connect with passphrase {}", passphrase);
             match truin_tx
@@ -468,7 +465,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
         while let Some(message) = transport_rx.next().await {
             println!("({}) received message from app", count);
             let message = message?;
-            let message = bincode::deserialize::<trainlappcomms::ToServer>(&message).unwrap();
+            let message = bincode::deserialize::<libtlc::ToServer>(&message).unwrap();
             //println!("({}) message: {:?}", count, message);
             match to_server_to_engine_command(message, session, team_id, player_id) {
                 EngineCommandConversion::Instant(command) => truin_sender_tx.send(*command)?,

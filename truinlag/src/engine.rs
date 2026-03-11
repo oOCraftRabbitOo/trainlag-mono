@@ -17,6 +17,12 @@ use bonsaidb::{
         config::{self, Builder},
     },
 };
+use libtruinlag::{
+    commands::{
+        BroadcastAction::*, EngineAction::*, EngineResponse, Error::*, ResponseAction::*, *,
+    },
+    *,
+};
 use log::{error, info, warn};
 use std::{
     collections::HashMap,
@@ -29,12 +35,6 @@ use std::{
 use tokio::{
     sync::Notify,
     time::{Duration, sleep},
-};
-use truinlag::{
-    commands::{
-        BroadcastAction::*, EngineAction::*, EngineResponse, Error::*, ResponseAction::*, *,
-    },
-    *,
 };
 
 /// A helper function for engine autosaves that provides a shorthand for overwriting multiple

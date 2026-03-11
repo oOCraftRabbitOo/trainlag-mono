@@ -11,6 +11,10 @@ use bonsaidb::{
 };
 use challenge::{ChallengeEntry, ChallengeSetEntry, InOpenChallenge};
 use error::Result;
+use libtruinlag::{
+    commands::{EngineAction, EngineCommand},
+    *,
+};
 use log::error;
 use partially::Partial;
 use runtime::{InternEngineCommand, RuntimeRequest, manager};
@@ -18,10 +22,6 @@ use serde::{Deserialize, Serialize};
 use session::Session;
 use std::{collections::HashMap, ops::Range};
 use team::{PeriodContext, TeamEntry};
-use truinlag::{
-    commands::{EngineAction, EngineCommand},
-    *,
-};
 
 /// this just starts the manager from the runtime :)
 #[tokio::main]
@@ -871,8 +871,8 @@ pub struct PlayerEntry {
 
 impl PlayerEntry {
     /// Converts the engine-internal `PlayerEntry` type into a sendable truinlag `Player` type
-    pub fn to_sendable(&self, id: u64) -> truinlag::Player {
-        truinlag::Player {
+    pub fn to_sendable(&self, id: u64) -> libtruinlag::Player {
+        libtruinlag::Player {
             name: self.name.clone(),
             session: self.session,
             id,
@@ -967,8 +967,8 @@ pub struct InGame {
 
 impl InGame {
     /// Converts the engine-internal `InGame` type into a sendable truinlag `Game` type
-    pub fn to_sendable(&self) -> truinlag::Game {
-        truinlag::Game {
+    pub fn to_sendable(&self) -> libtruinlag::Game {
+        libtruinlag::Game {
             name: self.name.clone(),
             date: self.start_time.date_naive(),
             mode: self.mode,

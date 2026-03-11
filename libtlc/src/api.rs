@@ -7,8 +7,8 @@ use std::io::{Error, ErrorKind};
 use tokio::{
     io::AsyncWriteExt,
     net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
     },
 };
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};

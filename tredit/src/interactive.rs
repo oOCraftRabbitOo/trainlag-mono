@@ -1,7 +1,7 @@
 use crate::parsley::{get_data, parse_record};
+use libtruinlag::{commands::*, Player};
+use libtruinlag::{Challenge, ChallengeSet, Mode};
 use std::collections::HashMap;
-use truinlag::{self, Challenge, ChallengeSet, Mode};
-use truinlag::{commands::*, Player};
 
 const CHALLENGE_SHEET: &str = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRcImsj8yCZNaKSx4wYk6GZnBkZ_Eody246mqM4UjsvYIW3wqd37kIhhIlrWJ3tiwSLbN9RWzMVs-V1/pub?gid=1012921349&single=true&output=csv";
 const ZONENKAFF_SHEET: &str = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSEz-OcFSz13kGB2Z9iRzLmBkor8R2o7C-tzOSm91cQKt4foAG6iGynlT8PhO3I5Pt5iB_Mj7Bu0BeO/pub?gid=1336941165&single=true&output=csv";
@@ -25,7 +25,7 @@ pub fn get_input(query: &str) -> String {
 }
 
 pub async fn interactive() {
-    let (sender, _receiver) = truinlag::api::connect(None).await.unwrap();
+    let (sender, _receiver) = libtruinlag::api::connect(None).await.unwrap();
     match get_input(
         "What do you want to do?\n\
         1: add player\n\
@@ -72,7 +72,7 @@ pub async fn interactive() {
     };
 }
 
-async fn get_locations(mut sender: truinlag::api::SendConnection) {
+async fn get_locations(mut sender: libtruinlag::api::SendConnection) {
     let session: u64 = get_input("session: ").parse().unwrap();
     let response = sender
         .send(EngineCommand {
@@ -91,7 +91,7 @@ async fn get_locations(mut sender: truinlag::api::SendConnection) {
     }
 }
 
-async fn get_zones(mut sender: truinlag::api::SendConnection) {
+async fn get_zones(mut sender: libtruinlag::api::SendConnection) {
     let response = sender
         .send(EngineCommand {
             session: None,
@@ -102,7 +102,7 @@ async fn get_zones(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn start_game(mut sender: truinlag::api::SendConnection) {
+async fn start_game(mut sender: libtruinlag::api::SendConnection) {
     let session: u64 = get_input("session: ").parse().unwrap();
     let response = sender
         .send(EngineCommand {
@@ -114,7 +114,7 @@ async fn start_game(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn stop_game(mut sender: truinlag::api::SendConnection) {
+async fn stop_game(mut sender: libtruinlag::api::SendConnection) {
     let session: u64 = get_input("session: ").parse().unwrap();
     let response = sender
         .send(EngineCommand {
@@ -126,7 +126,7 @@ async fn stop_game(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn rename_team(mut sender: truinlag::api::SendConnection) {
+async fn rename_team(mut sender: libtruinlag::api::SendConnection) {
     let session: u64 = get_input("session: ").parse().unwrap();
     let team: usize = get_input("team: ").parse().unwrap();
     let new_name = get_input("new name for team: ");
@@ -141,7 +141,7 @@ async fn rename_team(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn add_challenge_to_team(mut sender: truinlag::api::SendConnection) {
+async fn add_challenge_to_team(mut sender: libtruinlag::api::SendConnection) {
     let session: u64 = get_input("session: ").parse().unwrap();
     let team: usize = get_input("team: ").parse().unwrap();
     let title = get_input("challenge title: ");
@@ -165,7 +165,7 @@ async fn add_challenge_to_team(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn make_team_catcher(mut sender: truinlag::api::SendConnection) {
+async fn make_team_catcher(mut sender: libtruinlag::api::SendConnection) {
     let session: u64 = get_input("session: ").parse().unwrap();
     let team: usize = get_input("team: ").parse().unwrap();
     let response = sender
@@ -178,7 +178,7 @@ async fn make_team_catcher(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn make_team_runner(mut sender: truinlag::api::SendConnection) {
+async fn make_team_runner(mut sender: libtruinlag::api::SendConnection) {
     let session: u64 = get_input("session: ").parse().unwrap();
     let team: usize = get_input("team: ").parse().unwrap();
     let response = sender
@@ -191,16 +191,16 @@ async fn make_team_runner(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn get_session_state(sender: truinlag::api::SendConnection) {
+async fn get_session_state(sender: libtruinlag::api::SendConnection) {
     let session: u64 = get_input("session: ").parse().unwrap();
     get_state(sender, Some(session)).await;
 }
 
-async fn get_global_state(sender: truinlag::api::SendConnection) {
+async fn get_global_state(sender: libtruinlag::api::SendConnection) {
     get_state(sender, None).await;
 }
 
-async fn get_state(mut sender: truinlag::api::SendConnection, session: Option<u64>) {
+async fn get_state(mut sender: libtruinlag::api::SendConnection, session: Option<u64>) {
     let response = sender
         .send(EngineCommand {
             session,
@@ -212,7 +212,7 @@ async fn get_state(mut sender: truinlag::api::SendConnection, session: Option<u6
 }
 
 async fn get_player_by_passphrase(
-    mut sender: truinlag::api::SendConnection,
+    mut sender: libtruinlag::api::SendConnection,
     passphrase: String,
 ) -> Player {
     match sender
@@ -238,7 +238,7 @@ async fn get_player_by_passphrase(
     }
 }
 
-async fn assign(mut sender: truinlag::api::SendConnection) {
+async fn assign(mut sender: libtruinlag::api::SendConnection) {
     use EngineAction::*;
     let session: u64 = get_input("in which session? (u64): ").parse().unwrap();
     let player =
@@ -262,7 +262,7 @@ async fn assign(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response)
 }
 
-async fn add_session(mut sender: truinlag::api::SendConnection) {
+async fn add_session(mut sender: libtruinlag::api::SendConnection) {
     use EngineAction::*;
     let name = get_input("Session name: ");
     let response = sender
@@ -278,7 +278,7 @@ async fn add_session(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn add_team(mut sender: truinlag::api::SendConnection) {
+async fn add_team(mut sender: libtruinlag::api::SendConnection) {
     use EngineAction::*;
     let name = get_input("What should the team's name be?: ");
     let session: u64 = get_input("In which session?: ").parse().unwrap();
@@ -296,7 +296,7 @@ async fn add_team(mut sender: truinlag::api::SendConnection) {
     println!("{:?}", response);
 }
 
-async fn set_session(mut sender: truinlag::api::SendConnection) {
+async fn set_session(mut sender: libtruinlag::api::SendConnection) {
     let passphrase = get_input("Passphrase of player: ");
     let session = get_input("Session (leave empty for None): ");
     let session = match session.as_str() {
@@ -319,7 +319,7 @@ async fn set_session(mut sender: truinlag::api::SendConnection) {
     println!("Engine Response: {:?}", response)
 }
 
-async fn add_player(mut sender: truinlag::api::SendConnection) {
+async fn add_player(mut sender: libtruinlag::api::SendConnection) {
     let name = get_input("Name: ");
     let passphrase = get_input("Passphrase: ");
     let session = get_input("Session (leave empty for None): ");
@@ -370,7 +370,7 @@ fn printnnl(text: &str) {
     std::io::stdout().flush().unwrap();
 }
 
-pub async fn import_challenges(mut sender: truinlag::api::SendConnection) {
+pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
     let sheet_sets = [
         "og",
         "geso",
@@ -525,7 +525,7 @@ pub async fn import_challenges(mut sender: truinlag::api::SendConnection) {
     println!("  done!");
 }
 
-async fn delete_all_challenges(mut sender: truinlag::api::SendConnection) {
+async fn delete_all_challenges(mut sender: libtruinlag::api::SendConnection) {
     match get_input("Are you sure? (yes/no): ").as_str() {
         "yes" => {
             let response = sender
@@ -543,6 +543,6 @@ async fn delete_all_challenges(mut sender: truinlag::api::SendConnection) {
     }
 }
 
-async fn get_challenges(mut sender: truinlag::api::SendConnection) {
+async fn get_challenges(mut sender: libtruinlag::api::SendConnection) {
     println!("{:?}", sender.get_raw_challenges().await);
 }
