@@ -1,3 +1,4 @@
+use chrono::NaiveTime;
 use futures::prelude::*;
 use libtlc::*;
 use libtruinlag::TeamRole;
@@ -67,8 +68,8 @@ fn response_to_to_app(response: ResponseAction, player_id: u64, session_id: u64)
             };
             Some(ToApp::Everything(Everything {
                 state,
-                teams: teams.into_iter().map(|t| t.into()).collect(),
-                events: events.into_iter().map(|e| e.into()).collect(),
+                teams,
+                events,
                 you: player_id,
                 your_team,
                 your_session: session_id,
@@ -84,13 +85,11 @@ fn response_to_to_app(response: ResponseAction, player_id: u64, session_id: u64)
         SendEvents(_) => None,
         UploadedPictures(_) => None,
         Period(id) => Some(ToApp::AddedPeriod(id)),
-        Pictures(pics) => Some(ToApp::Pictures(
-            pics.into_iter().map(|p| p.into()).collect(),
-        )),
+        Pictures(pics) => Some(ToApp::Pictures(pics)),
         SendLocations(_) => None,
         SendPastLocations { team_id, locations } => Some(ToApp::SendPastLocations {
             team: team_id,
-            locations: locations.into_iter().map(|l| l.into()).collect(),
+            locations,
         }),
         SendGameConfig(_) => None,
     }
@@ -121,10 +120,7 @@ async fn broadcast_to_to_app(
                 None
             }
         }
-        Location { team, location } => Some(ToApp::Location {
-            team,
-            location: location.into(),
-        }),
+        Location { team, location } => Some(ToApp::Location { team, location }),
         Caught { catcher, caught } => {
             let everything = get_everything(player_id, truin_tx, session).await;
             if catcher.id == team_id {
@@ -133,11 +129,11 @@ async fn broadcast_to_to_app(
                 Some(ToApp::BecomeCatcher(everything))
             } else {
                 Some(ToApp::EventOccurred(
-                    Event::CatchTeam {
+                    Event::Catch {
                         catcher_id: catcher.id,
                         caught_id: caught.id,
                         bounty: 0,
-                        time: 0,
+                        time: NaiveTime::MIN,
                         picture_ids: Vec::new(),
                         location: MinimalLocation {
                             latitude: 0_f32,
@@ -155,9 +151,9 @@ async fn broadcast_to_to_app(
         } => {
             let everything = get_everything(player_id, truin_tx, session).await;
             let event = Event::Complete {
-                challenge: completed.into(),
+                challenge: completed,
                 completer_id: completer.id,
-                time: 0,
+                time: NaiveTime::MIN,
                 picture_ids: Vec::new(),
                 location: MinimalLocation {
                     latitude: 0_f32,
@@ -272,7 +268,7 @@ fn to_server_to_engine_command(
             session: Some(session),
             action: EngineAction::SendLocation {
                 player: player_id,
-                location: location.into(),
+                location,
             },
         }
         .into(),

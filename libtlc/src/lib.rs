@@ -2,8 +2,10 @@ use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "from")]
-use chrono::Timelike;
+pub use libtruinlag::{
+    Challenge, CompletedChallenge, DetailedLocation, Event, MinimalLocation, Picture, Player, Team,
+    TeamRole,
+};
 
 pub mod api;
 
@@ -68,7 +70,7 @@ pub enum ToApp {
         location: DetailedLocation,
     },
     AddedPeriod(usize),
-    Pictures(Vec<JuhuiPicture>),
+    Pictures(Vec<Picture>),
     Error(ClientError),
     SendPastLocations {
         team: usize,
@@ -125,7 +127,6 @@ impl std::fmt::Display for ClientError {
     }
 }
 
-#[cfg(feature = "from")]
 impl TryFrom<libtruinlag::commands::Error> for ClientError {
     type Error = ();
     fn try_from(value: libtruinlag::commands::Error) -> Result<Self, Self::Error> {
@@ -159,257 +160,11 @@ pub struct ToAppPackage {
     id: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Event {
-    CatchTeam {
-        catcher_id: usize,
-        caught_id: usize,
-        bounty: u64,
-        time: u32,
-        picture_ids: Vec<u64>,
-        location: MinimalLocation,
-    },
-    Complete {
-        challenge: Challenge,
-        completer_id: usize,
-        time: u32,
-        picture_ids: Vec<u64>,
-        location: MinimalLocation,
-    },
-}
-
-#[cfg(feature = "from")]
-impl From<libtruinlag::Event> for Event {
-    fn from(value: libtruinlag::Event) -> Self {
-        match value {
-            libtruinlag::Event::Complete {
-                challenge,
-                completer_id,
-                time,
-                picture_ids,
-                location,
-            } => Event::Complete {
-                challenge: challenge.into(),
-                completer_id,
-                time: time.num_seconds_from_midnight(),
-                picture_ids,
-                location: location.into(),
-            },
-            libtruinlag::Event::Catch {
-                catcher_id,
-                caught_id,
-                bounty,
-                time,
-                picture_ids,
-                location,
-            } => Event::CatchTeam {
-                catcher_id,
-                caught_id,
-                bounty,
-                time: time.num_seconds_from_midnight(),
-                picture_ids,
-                location: location.into(),
-            },
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct JuhuiPicture {
-    pub data: Vec<u8>,
-    pub is_thumbnail: bool,
-    pub id: u64,
-}
-
-#[cfg(feature = "from")]
-impl From<libtruinlag::Picture> for JuhuiPicture {
-    fn from(value: libtruinlag::Picture) -> Self {
-        JuhuiPicture {
-            data: value.data.get_bytes(),
-            is_thumbnail: value.is_thumbnail,
-            id: value.id,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub enum State {
     GameNotRunning,
     Runner,
     Catcher,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DetailedLocation {
-    pub latitude: f32,
-    pub longitude: f32,
-    /// accuracy in metres
-    pub accuracy: u16,
-    /// heading in degrees. 0º is north (hopefully)
-    pub heading: f32,
-    /// speed in m/s
-    pub speed: f32,
-    pub timestamp: i64,
-}
-
-#[cfg(feature = "from")]
-impl From<DetailedLocation> for libtruinlag::DetailedLocation {
-    fn from(val: DetailedLocation) -> Self {
-        libtruinlag::DetailedLocation {
-            latitude: val.latitude,
-            longitude: val.longitude,
-            accuracy: val.accuracy,
-            heading: val.heading,
-            speed: val.speed,
-            timestamp: val.timestamp,
-        }
-    }
-}
-
-#[cfg(feature = "from")]
-impl From<libtruinlag::DetailedLocation> for DetailedLocation {
-    fn from(value: libtruinlag::DetailedLocation) -> Self {
-        Self {
-            latitude: value.latitude,
-            longitude: value.longitude,
-            accuracy: value.accuracy,
-            heading: value.heading,
-            speed: value.speed,
-            timestamp: value.timestamp,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MinimalLocation {
-    pub latitude: f32,
-    pub longitude: f32,
-    pub timestamp: i64,
-}
-
-#[cfg(feature = "from")]
-impl From<MinimalLocation> for libtruinlag::MinimalLocation {
-    fn from(val: MinimalLocation) -> Self {
-        libtruinlag::MinimalLocation {
-            latitude: val.latitude,
-            longitude: val.longitude,
-            timestamp: val.timestamp,
-        }
-    }
-}
-
-#[cfg(feature = "from")]
-impl From<libtruinlag::MinimalLocation> for MinimalLocation {
-    fn from(value: libtruinlag::MinimalLocation) -> Self {
-        Self {
-            latitude: value.latitude,
-            longitude: value.longitude,
-            timestamp: value.timestamp,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Team {
-    pub is_catcher: bool,
-    pub name: String,
-    pub picture_id: Option<u64>,
-    pub id: usize,
-    pub bounty: u64,
-    pub points: u64,
-    pub players: Vec<Player>,
-    pub challenges: Vec<Challenge>,
-    pub completed_challenges: Vec<CompletedChallenge>,
-    pub colour: (u8, u8, u8),
-    pub location: Option<DetailedLocation>,
-    pub in_grace_period: bool,
-    pub period_id: usize,
-}
-
-#[cfg(feature = "from")]
-impl From<libtruinlag::Team> for Team {
-    fn from(value: libtruinlag::Team) -> Self {
-        Self {
-            colour: (value.colour.r, value.colour.g, value.colour.b),
-            is_catcher: matches!(value.role, libtruinlag::TeamRole::Catcher),
-            name: value.name,
-            id: value.id,
-            picture_id: value.picture_id,
-            bounty: value.bounty,
-            points: value.points,
-            players: value.players.iter().map(|p| p.clone().into()).collect(),
-            challenges: value.challenges.iter().map(|c| c.clone().into()).collect(),
-            completed_challenges: value
-                .completed_challenges
-                .iter()
-                .map(|cc| cc.clone().into())
-                .collect(),
-            location: value.location.map(|l| l.into()),
-            in_grace_period: value.in_grace_period,
-            period_id: value.period_id,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Challenge {
-    pub title: String,
-    pub description: String,
-    pub points: u64,
-    // pub attached_images: Vec<String>,
-}
-
-#[cfg(feature = "from")]
-impl From<libtruinlag::Challenge> for Challenge {
-    fn from(challenge: libtruinlag::Challenge) -> Self {
-        Challenge {
-            title: challenge.title,
-            description: challenge.description,
-            points: challenge.points,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CompletedChallenge {
-    pub picture_ids: Vec<u64>,
-    pub title: String,
-    pub description: String,
-    pub points: u64,
-    pub time: chrono::NaiveTime,
-}
-
-#[cfg(feature = "from")]
-impl From<libtruinlag::CompletedChallenge> for CompletedChallenge {
-    fn from(value: libtruinlag::CompletedChallenge) -> Self {
-        Self {
-            picture_ids: value.picture_ids,
-            title: value.title,
-            description: value.description,
-            points: value.points,
-            time: value.time,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Player {
-    pub name: String,
-    pub id: u64,
-    pub picture_id: Option<u64>,
-    pub phone_number: Option<String>,
-}
-
-#[cfg(feature = "from")]
-impl From<libtruinlag::Player> for Player {
-    fn from(value: libtruinlag::Player) -> Self {
-        Self {
-            name: value.name,
-            id: value.id,
-            picture_id: value.picture_id,
-            phone_number: value.phone_number,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

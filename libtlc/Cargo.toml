@@ -12,6 +12,3 @@ tokio = { version = "1", features = ["io-util", "net"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 libtruinlag = { path = "../libtruinlag" }
 futures = "0.3"
-
-[features]
-from = []
