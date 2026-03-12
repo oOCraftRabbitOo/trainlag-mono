@@ -785,6 +785,8 @@ impl TeamEntry {
         catcher_id: usize,
         context: &mut SessionContext,
     ) -> RuntimeRequest {
+        self.points += bounty;
+        self.bounty = 0;
         self.generate_challenges(context);
         self.role = TeamRole::Runner;
         let (request, timer) = context.engine_context.timer_tracker.timer(
@@ -795,8 +797,6 @@ impl TeamEntry {
             },
         );
         self.grace_period_end = Some(timer);
-        self.points += bounty;
-        self.bounty = 0;
         self.new_period(PeriodContext::Catcher {
             caught_team: caught_id,
             bounty,
