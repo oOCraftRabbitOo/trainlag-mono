@@ -1,10 +1,10 @@
-use clap::{value_parser, Arg, ArgAction, Command};
+use clap::{Arg, ArgAction, Command, value_parser};
 use clap_complete::{generate, shells::Zsh};
 use colored::Colorize;
 use libtruinlag::{
+    Challenge, PartialGameConfig,
     api::connect,
     commands::{EngineAction, EngineCommand},
-    Challenge, PartialGameConfig,
 };
 
 mod interactive;
@@ -351,7 +351,7 @@ async fn main() {
             if generate_arg {
                 generate(Zsh, &mut cli(), "tredit", &mut std::io::stdout());
             } else {
-                interactive::interactive().await;
+                println!("Hiii, I'm tredit :3")
             }
             return;
         }
@@ -363,7 +363,9 @@ async fn main() {
             println!("{}", address);
         }
         "set_challenge_sets" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
+            let session = sub_args
+                .remove_one::<u64>("Session ID")
+                .expect("session must be supplied");
             let sets = sub_args
                 .remove_many::<u64>("Challenge Set ID")
                 .unwrap()
@@ -374,8 +376,11 @@ async fn main() {
             };
             run_command(
                 EngineCommand {
-                    session,
-                    action: EngineAction::SetGameConfig(config),
+                    session: Some(session),
+                    action: EngineAction::SetGameConfig {
+                        session_id: session,
+                        config,
+                    },
                 },
                 address,
             )
@@ -392,7 +397,10 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::SetGameConfig(config),
+                    action: EngineAction::SetGameConfig {
+                        session_id: session.expect("session must be supplied"),
+                        config,
+                    },
                 },
                 address,
             )
@@ -409,7 +417,10 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::SetGameConfig(config),
+                    action: EngineAction::SetGameConfig {
+                        session_id: session.expect("session must be supplied"),
+                        config,
+                    },
                 },
                 address,
             )
@@ -428,7 +439,10 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::SetGameConfig(config),
+                    action: EngineAction::SetGameConfig {
+                        session_id: session.unwrap(),
+                        config,
+                    },
                 },
                 address,
             )
@@ -447,7 +461,10 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::SetGameConfig(config),
+                    action: EngineAction::SetGameConfig {
+                        session_id: session.unwrap(),
+                        config,
+                    },
                 },
                 address,
             )
@@ -459,7 +476,7 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::GetGameConfig,
+                    action: EngineAction::GetGameConfig(session.unwrap()),
                 },
                 address,
             )
@@ -482,7 +499,7 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::GetLocations,
+                    action: EngineAction::GetLocations(session.unwrap()),
                 },
                 address,
             )
@@ -505,7 +522,7 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::Stop,
+                    action: EngineAction::Stop(session.unwrap()),
                 },
                 address,
             )
@@ -517,7 +534,7 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::Start,
+                    action: EngineAction::Start(session.unwrap()),
                 },
                 address,
             )
@@ -563,6 +580,7 @@ async fn main() {
                 EngineCommand {
                     session,
                     action: EngineAction::RenameTeam {
+                        session_id: session.expect("session must be supplied"),
                         team,
                         new_name: name,
                     },
@@ -584,6 +602,7 @@ async fn main() {
                 EngineCommand {
                     session,
                     action: EngineAction::AddChallengeToTeam {
+                        session_id: session.unwrap(),
                         team,
                         challenge: Challenge {
                             title,
@@ -603,7 +622,10 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session: Some(session),
-                    action: EngineAction::MakeTeamRunner(team),
+                    action: EngineAction::MakeTeamRunner {
+                        session_id: session,
+                        team_id: team,
+                    },
                 },
                 address,
             )
@@ -616,7 +638,10 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session: Some(session),
-                    action: EngineAction::MakeTeamCatcher(team),
+                    action: EngineAction::MakeTeamCatcher {
+                        session_id: session,
+                        team_id: team,
+                    },
                 },
                 address,
             )
@@ -628,7 +653,7 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::GetState,
+                    action: EngineAction::GetState(session),
                 },
                 address,
             )
@@ -642,7 +667,11 @@ async fn main() {
             run_command(
                 EngineCommand {
                     session,
-                    action: EngineAction::AssignPlayerToTeam { player, team },
+                    action: EngineAction::AssignPlayerToTeam {
+                        session_id: session.unwrap(),
+                        player,
+                        team,
+                    },
                 },
                 address,
             )
@@ -659,6 +688,7 @@ async fn main() {
                 EngineCommand {
                     session: Some(*session),
                     action: EngineAction::AddTeam {
+                        session_id: *session,
                         name,
                         discord_channel: None,
                         colour: None,

@@ -14,6 +14,8 @@ use tokio::{
     time::Duration,
 };
 
+pub type InternEngineResponseResult = Result<InternEngineResponsePackage, Error>;
+
 #[derive(Debug)]
 pub enum EngineSignal {
     Command {

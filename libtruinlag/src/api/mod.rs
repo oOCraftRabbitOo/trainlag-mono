@@ -282,7 +282,7 @@ impl SendConnection {
         match self
             .send(EngineCommand {
                 session: None,
-                action: EngineAction::GetState,
+                action: EngineAction::GetState(None),
             })
             .await
         {

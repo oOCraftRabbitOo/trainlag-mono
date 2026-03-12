@@ -19,7 +19,7 @@ async fn get_everything(
         truin_tx
             .send(EngineCommand {
                 session: Some(session),
-                action: EngineAction::GetState,
+                action: EngineAction::GetState(Some(session)),
             })
             .await
             .unwrap(),
@@ -248,6 +248,7 @@ fn to_server_to_engine_command(
         SetTeamName(name) => EngineCommand {
             session: Some(session),
             action: EngineAction::RenameTeam {
+                session_id: session,
                 team: team_id,
                 new_name: name,
             },
@@ -266,6 +267,7 @@ fn to_server_to_engine_command(
         Location(location) => EngineCommand {
             session: Some(session),
             action: EngineAction::SendLocation {
+                session_id: session,
                 player: player_id,
                 location,
             },
@@ -282,6 +284,7 @@ fn to_server_to_engine_command(
                 EngineCommand {
                     session: Some(session),
                     action: EngineAction::UploadPeriodPictures {
+                        session_id: session,
                         pictures,
                         team: team_id,
                         period: event_id,
@@ -300,7 +303,11 @@ fn to_server_to_engine_command(
             let picture = tokio::task::block_in_place(|| RawPicture::from_bytes(picture).unwrap());
             EngineCommand {
                 session: Some(session),
-                action: EngineAction::UploadTeamPicture { team_id, picture },
+                action: EngineAction::UploadTeamPicture {
+                    team_id,
+                    picture,
+                    session_id: session,
+                },
             }
         })),
         Complete {
@@ -309,6 +316,7 @@ fn to_server_to_engine_command(
         } => EngineCommand {
             session: Some(session),
             action: EngineAction::Complete {
+                session_id: session,
                 completer: team_id,
                 completed: completed_id,
                 period_id,
@@ -321,6 +329,7 @@ fn to_server_to_engine_command(
         } => EngineCommand {
             session: Some(session),
             action: EngineAction::Catch {
+                session_id: session,
                 catcher: team_id,
                 caught: caught_id,
                 period_id,
@@ -334,7 +343,7 @@ fn to_server_to_engine_command(
         .into(),
         RequestEverything => EngineCommand {
             session: Some(session),
-            action: EngineAction::GetState,
+            action: EngineAction::GetState(Some(session)),
         }
         .into(),
         RequestPictures(pictures) => EngineCommand {
@@ -353,6 +362,7 @@ fn to_server_to_engine_command(
         } => EngineCommand {
             session: Some(session),
             action: EngineAction::GetPastLocations {
+                session_id: session,
                 of_past_seconds,
                 team_id,
             },
@@ -413,7 +423,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
                         } = truin_tx
                             .send(EngineCommand {
                                 session: Some(session),
-                                action: EngineAction::GetState,
+                                action: EngineAction::GetState(Some(session)),
                             })
                             .await
                             .unwrap()
@@ -624,6 +634,7 @@ async fn handle_pictures(mut stream: TcpStream) {
                     .send(EngineCommand {
                         session: Some(session),
                         action: EngineAction::UploadTeamPicture {
+                            session_id: session,
                             team_id: team,
                             picture: pic
                         }
@@ -658,6 +669,7 @@ async fn handle_pictures(mut stream: TcpStream) {
                     .send(EngineCommand {
                         session: Some(session),
                         action: EngineAction::UploadPeriodPictures {
+                            session_id: session,
                             pictures: vec![pic],
                             team,
                             period: period_id

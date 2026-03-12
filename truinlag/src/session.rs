@@ -90,7 +90,7 @@ impl Session {
     }
 
     /// Generates the session context from the engine context and the session id
-    fn context<'a>(&self, context: EngineContext<'a>, session_id: u64) -> SessionContext<'a> {
+    pub fn context<'a>(&self, context: EngineContext<'a>, session_id: u64) -> SessionContext<'a> {
         SessionContext {
             engine_context: context,
             config: self.config(),
@@ -120,7 +120,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and manually generates new challenges for a team
-    fn generate_team_challenges(
+    pub fn generate_team_challenges(
         &mut self,
         id: usize,
         context: &SessionContext,
@@ -135,7 +135,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and manually adds a challenge to a team
-    fn add_challenge_to_team(
+    pub fn add_challenge_to_team(
         &mut self,
         team: usize,
         challenge: Challenge,
@@ -162,7 +162,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and renames a team
-    fn rename_team(&mut self, team: usize, new_name: String) -> InternEngineResponsePackage {
+    pub fn rename_team(&mut self, team: usize, new_name: String) -> InternEngineResponsePackage {
         match self.teams.get_mut(team) {
             None => Error(NotFound(format!("team with id {}", team))).into(),
             Some(team) => {
@@ -173,7 +173,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and changes a given team's role to hunter
-    fn make_team_catcher(
+    pub fn make_team_catcher(
         &mut self,
         id: usize,
         context: &SessionContext,
@@ -195,7 +195,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and changes a given team's role to gatherer
-    fn make_team_runner(
+    pub fn make_team_runner(
         &mut self,
         id: usize,
         context: &SessionContext,
@@ -217,7 +217,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and processes a given players' location update
-    fn send_location(
+    pub fn send_location(
         &mut self,
         player: u64,
         location: DetailedLocation,
@@ -251,7 +251,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and assigns a player to a team
-    fn assign_player_to_team(
+    pub fn assign_player_to_team(
         &mut self,
         player: u64,
         team: Option<usize>,
@@ -295,7 +295,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and processes one team catching another
-    fn catch(
+    pub fn catch(
         &mut self,
         catcher: usize,
         caught: usize,
@@ -401,7 +401,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and processes a team completing a challenge
-    fn complete(
+    pub fn complete(
         &mut self,
         completer: usize,
         completed: usize,
@@ -453,7 +453,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and returns the current session state
-    fn get_state(&self, context: &SessionContext) -> InternEngineResponsePackage {
+    pub fn get_state(&self, context: &SessionContext) -> InternEngineResponsePackage {
         SendState {
             teams: self
                 .teams
@@ -468,7 +468,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and adds a team
-    fn add_team(
+    pub fn add_team(
         &mut self,
         name: String,
         discord_channel: Option<u64>,
@@ -508,7 +508,7 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and starts the game
-    fn start(&mut self, context: &mut SessionContext) -> InternEngineResponsePackage {
+    pub fn start(&mut self, context: &mut SessionContext) -> InternEngineResponsePackage {
         info!("starting game...");
         match self.game {
             Some(_) => Error(GameInProgress).into(),
@@ -580,7 +580,7 @@ impl Session {
                     chrono::Local::now().with_time(config.end_time).unwrap(),
                     InternEngineCommand::Command(Box::new(EngineCommand {
                         session: Some(context.session_id),
-                        action: Stop,
+                        action: Stop(context.session_id),
                     })),
                 );
 
@@ -621,7 +621,7 @@ impl Session {
 
     /// Corresponds to an `EngineAction` and stops the game. This is called automatically by a
     /// timer that is set up when starting the game.
-    fn stop(&mut self, context: &mut SessionContext) -> InternEngineResponsePackage {
+    pub fn stop(&mut self, context: &mut SessionContext) -> InternEngineResponsePackage {
         // check whether game is actually running
         if self.game.is_none() {
             return Error(GameNotRunning).into();
@@ -716,12 +716,12 @@ impl Session {
     }
 
     /// Corresponds to an `EngineAction` and returns all events in a list ordered by time
-    fn get_events(&self) -> InternEngineResponsePackage {
+    pub fn get_events(&self) -> InternEngineResponsePackage {
         SendEvents(self.gather_events()).into()
     }
 
     /// Corresponds to an `EngineAction` and updates a team's picture
-    fn upload_team_picture(
+    pub fn upload_team_picture(
         &mut self,
         team_id: usize,
         picture: RawPicture,
@@ -749,7 +749,7 @@ impl Session {
         }
     }
 
-    fn upload_period_pictures(
+    pub fn upload_period_pictures(
         &mut self,
         team_id: usize,
         period_id: usize,
@@ -778,7 +778,7 @@ impl Session {
         }
     }
 
-    fn send_locations(&self, context: SessionContext) -> InternEngineResponsePackage {
+    pub fn send_locations(&self, context: SessionContext) -> InternEngineResponsePackage {
         SendLocations(
             self.teams
                 .iter()
@@ -789,7 +789,7 @@ impl Session {
         .into()
     }
 
-    fn send_past_locations(
+    pub fn send_past_locations(
         &self,
         team_id: usize,
         of_past_seconds: Option<NonZeroU32>,
@@ -814,128 +814,20 @@ impl Session {
         .into()
     }
 
-    fn send_game_config(&self) -> InternEngineResponsePackage {
+    pub fn send_game_config(&self) -> InternEngineResponsePackage {
         SendGameConfig(self.config().into()).into()
     }
 
-    fn set_game_config(&mut self, new_config: PartialGameConfig) -> InternEngineResponsePackage {
+    pub fn set_game_config(
+        &mut self,
+        new_config: PartialGameConfig,
+    ) -> InternEngineResponsePackage {
         self.config.apply_some(new_config.into());
         Success.into()
     }
 
-    fn remove_team(&mut self, team_id: usize) -> InternEngineResponsePackage {
+    pub fn remove_team(&mut self, team_id: usize) -> InternEngineResponsePackage {
         self.teams.remove(team_id);
         Success.into()
-    }
-
-    /// The core method of the session that processes commands with sessions.
-    ///
-    /// The method takes a command to process, as well as a session id. This should be the id of
-    /// the session that this method is called on and it is required because that id is not
-    /// actually known to the session. Additionally, context of type `EngineContext` is required in
-    /// order to access challenges, zones, players, etc.
-    pub fn vroom(
-        &mut self,
-        command: EngineAction,
-        session_id: u64,
-        context: EngineContext,
-    ) -> InternEngineResponsePackage {
-        let mut context = self.context(context, session_id);
-        match command {
-            RemoveTeam(team_id) => self.remove_team(team_id),
-            SetGameConfig(new_config) => self.set_game_config(new_config),
-            GetGameConfig => self.send_game_config(),
-            GetPastLocations {
-                team_id,
-                of_past_seconds,
-            } => self.send_past_locations(team_id, of_past_seconds),
-            GetLocations => self.send_locations(context),
-            UploadPeriodPictures {
-                pictures,
-                team,
-                period,
-            } => self.upload_period_pictures(team, period, pictures, context),
-            UploadTeamPicture { team_id, picture } => {
-                self.upload_team_picture(team_id, picture, context)
-            }
-            GetEvents => self.get_events(),
-            GenerateTeamChallenges(id) => self.generate_team_challenges(id, &context),
-            AddChallengeToTeam { team, challenge } => self.add_challenge_to_team(team, challenge),
-            RenameTeam { team, new_name } => self.rename_team(team, new_name),
-            MakeTeamCatcher(id) => self.make_team_catcher(id, &context),
-            MakeTeamRunner(id) => self.make_team_runner(id, &context),
-            SendLocation { player, location } => self.send_location(player, location),
-            AssignPlayerToTeam { player, team } => {
-                self.assign_player_to_team(player, team, &context)
-            }
-            Catch {
-                catcher,
-                caught,
-                period_id,
-            } => self.catch(catcher, caught, period_id, &mut context),
-            Complete {
-                completer,
-                completed,
-                period_id,
-            } => self.complete(completer, completed, period_id, &context),
-            GetState => self.get_state(&context),
-            AddTeam {
-                name,
-                discord_channel,
-                colour,
-            } => self.add_team(name, discord_channel, colour),
-            Start => self.start(&mut context),
-            Stop => self.stop(&mut context),
-            AddSession { name: _, mode: _ } => Error(SessionSupplied).into(),
-            Ping(_) => Error(SessionSupplied).into(),
-            GetPlayerByPassphrase(_) => Error(SessionSupplied).into(),
-            RemovePlayer { player: _ } => Error(SessionSupplied).into(),
-            SetPlayerSession {
-                player: _,
-                session: _,
-            } => Error(SessionSupplied).into(),
-            SetPlayerName { player: _, name: _ } => Error(SessionSupplied).into(),
-            SetPlayerPassphrase {
-                player: _,
-                passphrase: _,
-            } => Error(SessionSupplied).into(),
-            AddPlayer {
-                name: _,
-                discord_id: _,
-                passphrase: _,
-                session: _,
-            } => Error(SessionSupplied).into(),
-            GetRawChallenges => Error(SessionSupplied).into(),
-            SetRawChallenge(_) => Error(SessionSupplied).into(),
-            AddRawChallenge(_) => Error(SessionSupplied).into(),
-            AddChallengeSet(_) => Error(SessionSupplied).into(),
-            GetChallengeSets => Error(SessionSupplied).into(),
-            DeleteAllChallenges => Error(SessionSupplied).into(),
-            GetAllZones => Error(SessionSupplied).into(),
-            AddZone {
-                zone: _,
-                num_conn_zones: _,
-                num_connections: _,
-                train_through: _,
-                mongus: _,
-                s_bahn_zone: _,
-            } => Error(SessionSupplied).into(),
-            AddMinutesTo {
-                from_zone: _,
-                to_zone: _,
-                minutes: _,
-            } => Error(SessionSupplied).into(),
-            UploadPlayerPicture {
-                player_id: _,
-                picture: _,
-            } => Error(SessionSupplied).into(),
-            GetThumbnails(_) => Error(SessionSupplied).into(),
-            GetPictures(_) => Error(SessionSupplied).into(),
-            RenamePlayer {
-                player_id: _,
-                new_name: _,
-            } => Error(SessionSupplied).into(),
-            SetPlayerPhoneNumber(_, _) => Error(SessionSupplied).into(),
-        }
     }
 }

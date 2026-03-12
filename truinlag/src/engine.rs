@@ -1,9 +1,10 @@
 use crate::{
-    ClonedDBEntry, DBMirror, EngineContext, EngineSchema, PastGame, PictureEntry, PlayerEntry,
-    TimerTracker, ZoneEntry,
+    ClonedDBEntry, DBMirror, EngineContext, EngineSchema, MutDBEntry, PastGame, PictureEntry,
+    PlayerEntry, SessionContext, TimerTracker, ZoneEntry,
     challenge::{ChallengeEntry, ChallengeSetEntry},
     runtime::{
-        InternEngineCommand, InternEngineResponse, InternEngineResponsePackage, RuntimeRequest,
+        InternEngineCommand, InternEngineResponse, InternEngineResponsePackage,
+        InternEngineResponseResult, RuntimeRequest,
     },
     session::Session,
 };
@@ -261,24 +262,28 @@ impl Engine {
                 // There are global and session-specific commands. If a command has a session, then
                 // the action is handled by the corresponding session (which is saved within the
                 // engine).
-                match command.session {
-                    Some(id) => match self.sessions.get_mut(id) {
-                        Some(session) => {
-                            let context = EngineContext {
-                                player_db: &self.players,
-                                challenge_db: &self.challenges,
-                                challenge_set_db: &self.challenge_sets,
-                                zone_db: &self.zones,
-                                past_game_db: &mut self.past_games,
-                                picture_db: &mut self.pictures,
-                                timer_tracker: &mut self.timer_tracker,
-                            };
-                            session.contents.vroom(command.action, id, context)
-                        }
-                        None => Error(NotFound(format!("session with id {}", id))).into(),
-                    },
-                    None => self.handle_action(command.action), // global action helper function
+                match self.handle_action(command.action) {
+                    Ok(pkg) => pkg,
+                    Err(err) => Error(err).into(),
                 }
+                // match command.session {
+                //     Some(id) => match self.sessions.get_mut(id) {
+                //         Some(session) => {
+                //             let context = EngineContext {
+                //                 player_db: &self.players,
+                //                 challenge_db: &self.challenges,
+                //                 challenge_set_db: &self.challenge_sets,
+                //                 zone_db: &self.zones,
+                //                 past_game_db: &mut self.past_games,
+                //                 picture_db: &mut self.pictures,
+                //                 timer_tracker: &mut self.timer_tracker,
+                //             };
+                //             session.contents.vroom(command.action, id, context)
+                //         }
+                //         None => Error(NotFound(format!("session with id {}", id))).into(),
+                //     },
+                //     None => self.handle_action(command.action), // global action helper function
+                // }
             }
 
             InternEngineCommand::TeamLeftGracePeriod {
@@ -491,6 +496,43 @@ impl Engine {
             warn!("A command took {}ms to complete.", duration.as_millis());
         }
         response
+    }
+
+    fn get_session(&mut self, session_id: u64) -> Result<MutDBEntry<'_, Session>, commands::Error> {
+        self.sessions
+            .get_mut(session_id)
+            .ok_or(commands::Error::NotFound(format!(
+                "session with id {}",
+                session_id
+            )))
+    }
+
+    fn get_contexed_session(
+        &mut self,
+        session_id: u64,
+    ) -> Result<(SessionContext<'_>, MutDBEntry<'_, Session>), commands::Error> {
+        let session = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or(commands::Error::NotFound(format!(
+                "session with id {}",
+                session_id
+            )))?;
+        Ok((
+            session.contents.context(
+                EngineContext {
+                    player_db: &self.players,
+                    challenge_db: &self.challenges,
+                    challenge_set_db: &self.challenge_sets,
+                    zone_db: &self.zones,
+                    past_game_db: &mut self.past_games,
+                    picture_db: &mut self.pictures,
+                    timer_tracker: &mut self.timer_tracker,
+                },
+                session_id,
+            ),
+            session,
+        ))
     }
 
     fn get_all_zones(&self) -> InternEngineResponsePackage {
@@ -729,20 +771,28 @@ impl Engine {
         .into()
     }
 
-    fn get_state(&self) -> InternEngineResponsePackage {
-        let sessions = self
-            .sessions
-            .get_all()
-            .iter()
-            .map(|s| s.contents.to_sendable(s.id))
-            .collect();
-        let players = self
-            .players
-            .get_all()
-            .iter()
-            .map(|p| p.contents.to_sendable(p.id))
-            .collect();
-        SendGlobalState { sessions, players }.into()
+    fn get_state(&mut self, session_id: Option<u64>) -> InternEngineResponseResult {
+        match session_id {
+            Some(session_id) => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session.contents.get_state(&context))
+            }
+            None => {
+                let sessions = self
+                    .sessions
+                    .get_all()
+                    .iter()
+                    .map(|s| s.contents.to_sendable(s.id))
+                    .collect();
+                let players = self
+                    .players
+                    .get_all()
+                    .iter()
+                    .map(|p| p.contents.to_sendable(p.id))
+                    .collect();
+                Ok(SendGlobalState { sessions, players }.into())
+            }
+        }
     }
 
     fn add_challenge_set(&mut self, name: String) -> InternEngineResponsePackage {
@@ -870,21 +920,21 @@ impl Engine {
         }
     }
 
-    fn handle_action(&mut self, action: EngineAction) -> InternEngineResponsePackage {
+    fn handle_action(&mut self, action: EngineAction) -> InternEngineResponseResult {
         match action {
             SetPlayerPhoneNumber(player_id, phone_number) => {
-                self.set_player_phone_number(player_id, phone_number)
+                Ok(self.set_player_phone_number(player_id, phone_number))
             }
             RenamePlayer {
                 player_id,
                 new_name,
-            } => self.rename_player(player_id, new_name),
-            GetPictures(ids) => self.get_pictures(ids),
-            GetThumbnails(ids) => self.get_thumbnails(ids),
+            } => Ok(self.rename_player(player_id, new_name)),
+            GetPictures(ids) => Ok(self.get_pictures(ids)),
+            GetThumbnails(ids) => Ok(self.get_thumbnails(ids)),
             UploadPlayerPicture { player_id, picture } => {
-                self.upload_player_picture(player_id, picture)
+                Ok(self.upload_player_picture(player_id, picture))
             }
-            GetAllZones => self.get_all_zones(),
+            GetAllZones => Ok(self.get_all_zones()),
             AddZone {
                 zone,
                 num_conn_zones,
@@ -892,92 +942,189 @@ impl Engine {
                 train_through,
                 mongus,
                 s_bahn_zone,
-            } => self.add_zone(
+            } => Ok(self.add_zone(
                 zone,
                 num_conn_zones,
                 num_connections,
                 train_through,
                 mongus,
                 s_bahn_zone,
-            ),
+            )),
             AddMinutesTo {
                 from_zone,
                 to_zone,
                 minutes,
-            } => self.add_minutes_to(from_zone, to_zone, minutes),
-            GetRawChallenges => self.get_raw_challenges(),
-            SetRawChallenge(challenge) => self.set_raw_challenge(challenge),
-            AddRawChallenge(challenge) => self.add_raw_challenge(challenge),
-            DeleteAllChallenges => self.delete_all_challenges(),
-            GetPlayerByPassphrase(passphrase) => self.get_player_by_passphrase(passphrase),
-            AddSession { name, mode } => self.add_session(name, mode),
+            } => Ok(self.add_minutes_to(from_zone, to_zone, minutes)),
+            GetRawChallenges => Ok(self.get_raw_challenges()),
+            SetRawChallenge(challenge) => Ok(self.set_raw_challenge(challenge)),
+            AddRawChallenge(challenge) => Ok(self.add_raw_challenge(challenge)),
+            DeleteAllChallenges => Ok(self.delete_all_challenges()),
+            GetPlayerByPassphrase(passphrase) => Ok(self.get_player_by_passphrase(passphrase)),
+            AddSession { name, mode } => Ok(self.add_session(name, mode)),
             AddPlayer {
                 name,
                 discord_id,
                 passphrase,
                 session,
-            } => self.add_player(name, discord_id, passphrase, session),
-            SetPlayerSession { player, session } => self.set_player_session(player, session),
-            SetPlayerName { player, name } => self.set_player_name(player, name),
+            } => Ok(self.add_player(name, discord_id, passphrase, session)),
+            SetPlayerSession { player, session } => Ok(self.set_player_session(player, session)),
+            SetPlayerName { player, name } => Ok(self.set_player_name(player, name)),
             SetPlayerPassphrase { player, passphrase } => {
-                self.set_player_passphrase(player, passphrase)
+                Ok(self.set_player_passphrase(player, passphrase))
             }
-            RemovePlayer { player } => self.remove_player(player),
-            Ping(payload) => self.ping(payload),
-            GetState => self.get_state(),
-            AddChallengeSet(name) => self.add_challenge_set(name),
-            GetChallengeSets => self.get_challenge_sets(),
-            Start => Error(NoSessionSupplied).into(),
-            Stop => Error(NoSessionSupplied).into(),
+            RemovePlayer { player } => Ok(self.remove_player(player)),
+            Ping(payload) => Ok(self.ping(payload)),
+            GetState(session_id) => self.get_state(session_id),
+            AddChallengeSet(name) => Ok(self.add_challenge_set(name)),
+            GetChallengeSets => Ok(self.get_challenge_sets()),
+            Start(session_id) => {
+                let (mut context, session) = self.get_contexed_session(session_id)?;
+                Ok(session.contents.start(&mut context))
+            }
+            Stop(session_id) => {
+                let (mut context, session) = self.get_contexed_session(session_id)?;
+                Ok(session.contents.stop(&mut context))
+            }
             Catch {
-                catcher: _,
-                caught: _,
-                period_id: _,
-            } => Error(NoSessionSupplied).into(),
+                session_id,
+                catcher,
+                caught,
+                period_id,
+            } => {
+                let (mut context, session) = self.get_contexed_session(session_id)?;
+                Ok(session
+                    .contents
+                    .catch(catcher, caught, period_id, &mut context))
+            }
             Complete {
-                completer: _,
-                completed: _,
-                period_id: _,
-            } => Error(NoSessionSupplied).into(),
+                session_id,
+                completer,
+                completed,
+                period_id,
+            } => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session
+                    .contents
+                    .complete(completer, completed, period_id, &context))
+            }
             SendLocation {
-                player: _,
-                location: _,
-            } => Error(NoSessionSupplied).into(),
+                session_id,
+                player,
+                location,
+            } => {
+                let session = self.get_session(session_id)?;
+                Ok(session.contents.send_location(player, location))
+            }
             AddTeam {
-                name: _,
-                discord_channel: _,
-                colour: _,
-            } => Error(NoSessionSupplied).into(),
-            AssignPlayerToTeam { player: _, team: _ } => Error(NoSessionSupplied).into(),
-            MakeTeamRunner(_) => Error(NoSessionSupplied).into(),
-            MakeTeamCatcher(_) => Error(NoSessionSupplied).into(),
-            GenerateTeamChallenges(_) => Error(NoSessionSupplied).into(),
+                session_id,
+                name,
+                discord_channel,
+                colour,
+            } => {
+                let session = self.get_session(session_id)?;
+                Ok(session.contents.add_team(name, discord_channel, colour))
+            }
+            AssignPlayerToTeam {
+                session_id,
+                player,
+                team,
+            } => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session
+                    .contents
+                    .assign_player_to_team(player, team, &context))
+            }
+            MakeTeamRunner {
+                session_id,
+                team_id,
+            } => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session.contents.make_team_runner(team_id, &context))
+            }
+            MakeTeamCatcher {
+                session_id,
+                team_id,
+            } => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session.contents.make_team_catcher(team_id, &context))
+            }
+            GenerateTeamChallenges {
+                session_id,
+                team_id,
+            } => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session.contents.generate_team_challenges(team_id, &context))
+            }
             AddChallengeToTeam {
-                team: _,
-                challenge: _,
-            } => Error(NoSessionSupplied).into(),
+                session_id,
+                team,
+                challenge,
+            } => {
+                let session = self.get_session(session_id)?;
+                Ok(session.contents.add_challenge_to_team(team, challenge))
+            }
             RenameTeam {
-                team: _,
-                new_name: _,
-            } => Error(NoSessionSupplied).into(),
-            GetEvents => Error(NoSessionSupplied).into(),
+                session_id,
+                team,
+                new_name,
+            } => {
+                let session = self.get_session(session_id)?;
+                Ok(session.contents.rename_team(team, new_name))
+            }
+            GetEvents(session_id) => {
+                let session = self.get_session(session_id)?;
+                Ok(session.contents.get_events())
+            }
             UploadTeamPicture {
-                team_id: _,
-                picture: _,
-            } => Error(NoSessionSupplied).into(),
+                session_id,
+                team_id,
+                picture,
+            } => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session
+                    .contents
+                    .upload_team_picture(team_id, picture, context))
+            }
             UploadPeriodPictures {
-                pictures: _,
-                team: _,
-                period: _,
-            } => Error(NoSessionSupplied).into(),
-            GetLocations => Error(NoSessionSupplied).into(),
+                session_id,
+                pictures,
+                team,
+                period,
+            } => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session
+                    .contents
+                    .upload_period_pictures(team, period, pictures, context))
+            }
+            GetLocations(session_id) => {
+                let (context, session) = self.get_contexed_session(session_id)?;
+                Ok(session.contents.send_locations(context))
+            }
             GetPastLocations {
-                team_id: _,
-                of_past_seconds: _,
-            } => Error(NoSessionSupplied).into(),
-            GetGameConfig => Error(NoSessionSupplied).into(),
-            SetGameConfig(_) => Error(NoSessionSupplied).into(),
-            RemoveTeam(_) => Error(NoSessionSupplied).into(),
+                session_id,
+                team_id,
+                of_past_seconds,
+            } => {
+                let session = self.get_session(session_id)?;
+                Ok(session
+                    .contents
+                    .send_past_locations(team_id, of_past_seconds))
+            }
+            GetGameConfig(session_id) => {
+                let session = self.get_session(session_id)?;
+                Ok(session.contents.send_game_config())
+            }
+            SetGameConfig { session_id, config } => {
+                let session = self.get_session(session_id)?;
+                Ok(session.contents.set_game_config(config))
+            }
+            RemoveTeam {
+                session_id,
+                team_id,
+            } => {
+                let session = self.get_session(session_id)?;
+                Ok(session.contents.remove_team(team_id))
+            }
         }
     }
 }
