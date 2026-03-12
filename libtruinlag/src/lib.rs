@@ -58,6 +58,12 @@ impl From<DetailedLocation> for MinimalLocation {
     }
 }
 
+impl PartialEq for MinimalLocation {
+    fn eq(&self, other: &Self) -> bool {
+        self.latitude == other.latitude && self.longitude == other.longitude
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Colour {
     pub r: u8,

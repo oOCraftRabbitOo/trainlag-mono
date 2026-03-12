@@ -4,7 +4,8 @@ use crate::{
     Config, EngineContext, InGame, PartialConfig, PastGame, PictureEntry, SessionContext,
     challenge::InOpenChallenge,
     runtime::{
-        InternEngineCommand, InternEngineResponse, InternEngineResponsePackage, RuntimeRequest,
+        InternEngineCommand, InternEngineResponse, InternEngineResponsePackage,
+        InternEngineResponseResult, RuntimeRequest,
     },
     team::{PeriodContext, TeamEntry},
 };
@@ -219,47 +220,72 @@ impl Session {
     /// Corresponds to an `EngineAction` and processes a given players' location update
     pub fn send_location(
         &mut self,
-        player: u64,
+        player_id: u64,
         location: DetailedLocation,
-    ) -> InternEngineResponsePackage {
+        context: SessionContext,
+    ) -> InternEngineResponseResult {
         if self.game.is_none() {
             // locations should't be tracked if no game is running. A success response is returned
             // anyways, since the trainlapp always shows all error responses as full-screen popups.
             // That would be extremely obnoxious pre– and post-game. We should probably rework the
             // app to stop sending locations at those times. Yeah, that'll be a TODO
-            return Success.into();
+            return Ok(Success.into());
         }
-        match self
-            .teams
-            .iter_mut()
-            .enumerate()
-            .find(|(_, t)| t.players.contains(&player))
+        let player = context
+            .engine_context
+            .player_db
+            .get_mut(player_id)
+            .ok_or(NotFound(format!("player with id {}", player_id)))?;
+        if let Some(last_loc) = &player.contents.last_location
+            && last_loc == &location.clone().into()
         {
-            None => Error(NotFound(format!("team with the player with id {}", player))).into(),
-            Some((team_id, team)) => match team.add_location(location, player) {
-                Some(location) => EngineResponse {
-                    response_action: Success,
-                    broadcast_action: Some(Location {
-                        team: team_id,
-                        location,
-                    }),
-                }
-                .into(),
-                None => Success.into(),
-            },
+            return Ok(Success.into());
         }
+        player.contents.last_location = Some(location.clone().into());
+        Ok(
+            match self
+                .teams
+                .iter_mut()
+                .enumerate()
+                .find(|(_, t)| t.players.contains(&player_id))
+            {
+                None => Error(NotFound(format!(
+                    "team with the player with id {}",
+                    player_id
+                )))
+                .into(),
+                Some((team_id, team)) => match team.add_location(location, player_id) {
+                    Some(location) => EngineResponse {
+                        response_action: Success,
+                        broadcast_action: Some(Location {
+                            team: team_id,
+                            location,
+                        }),
+                    }
+                    .into(),
+                    None => Success.into(),
+                },
+            },
+        )
     }
 
     /// Corresponds to an `EngineAction` and assigns a player to a team
     pub fn assign_player_to_team(
         &mut self,
-        player: u64,
+        player_id: u64,
         team: Option<usize>,
-        context: &SessionContext,
-    ) -> InternEngineResponsePackage {
+        context: SessionContext,
+    ) -> InternEngineResponseResult {
+        context
+            .engine_context
+            .player_db
+            .get_mut(player_id)
+            .ok_or(NotFound(format!("player with id {}", player_id)))?
+            .contents
+            .last_location = None;
         let mut old_team = None;
         self.teams.iter_mut().enumerate().for_each(|(index, t)| {
-            if let Some(i) = t.players.iter().position(|p| p == &player) {
+            if let Some(i) = t.players.iter().position(|p| p == &player_id) {
                 t.players.remove(i);
                 old_team = Some(index)
             }
@@ -267,30 +293,30 @@ impl Session {
         match team {
             Some(t) => match self.teams.get_mut(t) {
                 Some(t) => {
-                    t.players.push(player);
-                    EngineResponse {
+                    t.players.push(player_id);
+                    Ok(EngineResponse {
                         response_action: Success,
                         broadcast_action: Some(PlayerChangedTeam {
                             session: context.session_id,
-                            player,
+                            player: player_id,
                             from_team: old_team,
                             to_team: team,
                         }),
                     }
-                    .into()
+                    .into())
                 }
-                None => Error(NotFound(format!("team with id {}", t))).into(),
+                None => Err(NotFound(format!("team with id {}", t))),
             },
-            None => EngineResponse {
+            None => Ok(EngineResponse {
                 response_action: Success,
                 broadcast_action: Some(PlayerChangedTeam {
                     session: context.session_id,
-                    player,
+                    player: player_id,
                     from_team: old_team,
                     to_team: team,
                 }),
             }
-            .into(),
+            .into()),
         }
     }
 
@@ -637,11 +663,17 @@ impl Session {
 
         // reset teams
         for team in &mut self.teams {
-            // let _ = team.reset(context);
+            // let _ = team.reset(context); // commented out so past game is still visible
             // we can ignore the potential error here, since the start zone is not relevant when
             // stopping the game.
             if let Some(timer) = &team.grace_period_end {
                 requests.push(timer.cancel_request());
+            }
+            // reset last locations...
+            for player_id in &team.players {
+                if let Some(player) = context.engine_context.player_db.get_mut(*player_id) {
+                    player.contents.last_location = None;
+                }
             }
         }
 

@@ -273,7 +273,7 @@ impl Engine {
                 team_id,
             } => {
                 let context = EngineContext {
-                    player_db: &self.players,
+                    player_db: &mut self.players,
                     challenge_db: &self.challenges,
                     challenge_set_db: &self.challenge_sets,
                     zone_db: &self.zones,
@@ -503,7 +503,7 @@ impl Engine {
         Ok((
             session.contents.context(
                 EngineContext {
-                    player_db: &self.players,
+                    player_db: &mut self.players,
                     challenge_db: &self.challenges,
                     challenge_set_db: &self.challenge_sets,
                     zone_db: &self.zones,
@@ -646,6 +646,7 @@ impl Engine {
                 discord_id,
                 passphrase,
                 session,
+                last_location: None,
             });
             Success.into()
         }
@@ -681,6 +682,7 @@ impl Engine {
                     match session {
                         None => {
                             i_player.contents.session = None;
+                            i_player.contents.last_location = None;
                             EngineResponse {
                                 response_action: Success,
                                 broadcast_action: Some(PlayerChangedSession {
@@ -694,6 +696,7 @@ impl Engine {
                         Some(session) => {
                             if self.sessions.get(session).is_some() {
                                 i_player.contents.session = Some(session);
+                                i_player.contents.last_location = None;
                                 EngineResponse {
                                     response_action: Success,
                                     broadcast_action: Some(PlayerChangedSession {
@@ -994,8 +997,8 @@ impl Engine {
                 player,
                 location,
             } => {
-                let session = self.get_session(session_id)?;
-                Ok(session.contents.send_location(player, location))
+                let (context, session) = self.get_contexed_session(session_id)?;
+                session.contents.send_location(player, location, context)
             }
             AddTeam {
                 session_id,
@@ -1012,9 +1015,9 @@ impl Engine {
                 team,
             } => {
                 let (context, session) = self.get_contexed_session(session_id)?;
-                Ok(session
+                session
                     .contents
-                    .assign_player_to_team(player, team, &context))
+                    .assign_player_to_team(player, team, context)
             }
             MakeTeamRunner {
                 session_id,

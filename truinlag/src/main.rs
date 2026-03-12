@@ -124,7 +124,7 @@ impl TimerTracker {
 /// function signatures smaller.
 #[derive(Debug)]
 pub struct EngineContext<'a> {
-    player_db: &'a DBMirror<PlayerEntry>,
+    player_db: &'a mut DBMirror<PlayerEntry>,
     challenge_db: &'a DBMirror<ChallengeEntry>,
     challenge_set_db: &'a DBMirror<ChallengeSetEntry>,
     zone_db: &'a DBMirror<ZoneEntry>,
@@ -861,6 +861,8 @@ pub struct PlayerEntry {
     #[serde(default)]
     phone_number: Option<String>,
     session: Option<u64>,
+    #[serde(default)]
+    last_location: Option<MinimalLocation>,
 }
 
 impl PlayerEntry {
