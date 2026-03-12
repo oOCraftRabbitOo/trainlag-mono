@@ -262,28 +262,10 @@ impl Engine {
                 // There are global and session-specific commands. If a command has a session, then
                 // the action is handled by the corresponding session (which is saved within the
                 // engine).
-                match self.handle_action(command.action) {
+                match self.handle_action(*command) {
                     Ok(pkg) => pkg,
                     Err(err) => Error(err).into(),
                 }
-                // match command.session {
-                //     Some(id) => match self.sessions.get_mut(id) {
-                //         Some(session) => {
-                //             let context = EngineContext {
-                //                 player_db: &self.players,
-                //                 challenge_db: &self.challenges,
-                //                 challenge_set_db: &self.challenge_sets,
-                //                 zone_db: &self.zones,
-                //                 past_game_db: &mut self.past_games,
-                //                 picture_db: &mut self.pictures,
-                //                 timer_tracker: &mut self.timer_tracker,
-                //             };
-                //             session.contents.vroom(command.action, id, context)
-                //         }
-                //         None => Error(NotFound(format!("session with id {}", id))).into(),
-                //     },
-                //     None => self.handle_action(command.action), // global action helper function
-                // }
             }
 
             InternEngineCommand::TeamLeftGracePeriod {

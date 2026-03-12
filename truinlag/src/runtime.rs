@@ -83,7 +83,7 @@ pub enum InternEngineResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InternEngineCommand {
-    Command(Box<EngineCommand>),
+    Command(Box<EngineAction>),
     AutoSave,
     UploadedImages(Vec<u64>),
     TeamLeftGracePeriod {

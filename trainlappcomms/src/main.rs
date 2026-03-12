@@ -1,7 +1,7 @@
 use futures::prelude::*;
 use libtlc::*;
 use libtruinlag::TeamRole;
-use libtruinlag::commands::{BroadcastAction, EngineAction, EngineCommand, ResponseAction};
+use libtruinlag::commands::{BroadcastAction, EngineAction, ResponseAction};
 use libtruinlag::{RawPicture, api};
 use std::error::Error;
 use tokio::io::AsyncReadExt;
@@ -17,10 +17,7 @@ async fn get_everything(
 ) -> Everything {
     match response_to_to_app(
         truin_tx
-            .send(EngineCommand {
-                session: Some(session),
-                action: EngineAction::GetState(Some(session)),
-            })
+            .send(EngineAction::GetState(Some(session)))
             .await
             .unwrap(),
         player_id,
@@ -227,12 +224,12 @@ async fn broadcast_to_to_app(
 }
 
 enum EngineCommandConversion {
-    Instant(Box<EngineCommand>),
-    Delayed(std::pin::Pin<Box<dyn Future<Output = EngineCommand> + Send + Sync>>),
+    Instant(Box<EngineAction>),
+    Delayed(std::pin::Pin<Box<dyn Future<Output = EngineAction> + Send + Sync>>),
 }
 
-impl From<EngineCommand> for EngineCommandConversion {
-    fn from(value: EngineCommand) -> Self {
+impl From<EngineAction> for EngineCommandConversion {
+    fn from(value: EngineAction) -> Self {
         Self::Instant(Box::new(value))
     }
 }
@@ -245,32 +242,20 @@ fn to_server_to_engine_command(
 ) -> EngineCommandConversion {
     use ToServer::*;
     match to_server {
-        SetTeamName(name) => EngineCommand {
-            session: Some(session),
-            action: EngineAction::RenameTeam {
-                session_id: session,
-                team: team_id,
-                new_name: name,
-            },
+        SetTeamName(name) => EngineAction::RenameTeam {
+            session_id: session,
+            team: team_id,
+            new_name: name,
         }
         .into(),
-        SetPhoneNumber(phone_number) => EngineCommand {
-            session: None,
-            action: EngineAction::SetPlayerPhoneNumber(player_id, phone_number),
+        SetPhoneNumber(phone_number) => {
+            EngineAction::SetPlayerPhoneNumber(player_id, phone_number).into()
         }
-        .into(),
-        Login(passphrase) => EngineCommand {
-            session: None,
-            action: EngineAction::GetPlayerByPassphrase(passphrase),
-        }
-        .into(),
-        Location(location) => EngineCommand {
-            session: Some(session),
-            action: EngineAction::SendLocation {
-                session_id: session,
-                player: player_id,
-                location,
-            },
+        Login(passphrase) => EngineAction::GetPlayerByPassphrase(passphrase).into(),
+        Location(location) => EngineAction::SendLocation {
+            session_id: session,
+            player: player_id,
+            location,
         }
         .into(),
         AttachPeriodPictures { event_id, pictures } => {
@@ -281,91 +266,57 @@ fn to_server_to_engine_command(
                         .filter_map(|p| RawPicture::from_bytes(p).ok())
                         .collect()
                 });
-                EngineCommand {
-                    session: Some(session),
-                    action: EngineAction::UploadPeriodPictures {
-                        session_id: session,
-                        pictures,
-                        team: team_id,
-                        period: event_id,
-                    },
+                EngineAction::UploadPeriodPictures {
+                    session_id: session,
+                    pictures,
+                    team: team_id,
+                    period: event_id,
                 }
             }))
         }
         UploadPlayerPicture(picture) => EngineCommandConversion::Delayed(Box::pin(async move {
             let picture = tokio::task::block_in_place(|| RawPicture::from_bytes(picture).unwrap());
-            EngineCommand {
-                session: None,
-                action: EngineAction::UploadPlayerPicture { player_id, picture },
-            }
+            EngineAction::UploadPlayerPicture { player_id, picture }
         })),
         UploadTeamPicture(picture) => EngineCommandConversion::Delayed(Box::pin(async move {
             let picture = tokio::task::block_in_place(|| RawPicture::from_bytes(picture).unwrap());
-            EngineCommand {
-                session: Some(session),
-                action: EngineAction::UploadTeamPicture {
-                    team_id,
-                    picture,
-                    session_id: session,
-                },
+            EngineAction::UploadTeamPicture {
+                team_id,
+                picture,
+                session_id: session,
             }
         })),
         Complete {
             completed_id,
             period_id,
-        } => EngineCommand {
-            session: Some(session),
-            action: EngineAction::Complete {
-                session_id: session,
-                completer: team_id,
-                completed: completed_id,
-                period_id,
-            },
+        } => EngineAction::Complete {
+            session_id: session,
+            completer: team_id,
+            completed: completed_id,
+            period_id,
         }
         .into(),
         Catch {
             caught_id,
             period_id,
-        } => EngineCommand {
-            session: Some(session),
-            action: EngineAction::Catch {
-                session_id: session,
-                catcher: team_id,
-                caught: caught_id,
-                period_id,
-            },
+        } => EngineAction::Catch {
+            session_id: session,
+            catcher: team_id,
+            caught: caught_id,
+            period_id,
         }
         .into(),
-        Ping(mayssage) => EngineCommand {
-            session: None,
-            action: EngineAction::Ping(mayssage),
-        }
-        .into(),
-        RequestEverything => EngineCommand {
-            session: Some(session),
-            action: EngineAction::GetState(Some(session)),
-        }
-        .into(),
-        RequestPictures(pictures) => EngineCommand {
-            session: None,
-            action: EngineAction::GetPictures(pictures),
-        }
-        .into(),
-        RequestThumbnails(thumbnails) => EngineCommand {
-            session: None,
-            action: EngineAction::GetThumbnails(thumbnails),
-        }
-        .into(),
+        Ping(mayssage) => EngineAction::Ping(mayssage).into(),
+        RequestEverything => EngineAction::GetState(Some(session)).into(),
+        RequestPictures(pictures) => EngineAction::GetPictures(pictures).into(),
+        RequestThumbnails(thumbnails) => EngineAction::GetThumbnails(thumbnails).into(),
         RequestPastLocations {
             of_past_seconds,
             team_id,
-        } => EngineCommand {
-            session: Some(session),
-            action: EngineAction::GetPastLocations {
-                session_id: session,
-                of_past_seconds,
-                team_id,
-            },
+        } => EngineAction::GetPastLocations {
+            session_id: session,
+            of_past_seconds,
+            team_id,
         }
         .into(),
     }
@@ -406,10 +357,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
         {
             println!("TLC: App trying to connect with passphrase {}", passphrase);
             match truin_tx
-                .send(EngineCommand {
-                    session: None,
-                    action: EngineAction::GetPlayerByPassphrase(passphrase),
-                })
+                .send(EngineAction::GetPlayerByPassphrase(passphrase))
                 .await
                 .unwrap()
             {
@@ -421,10 +369,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
                             events: _,
                             game: _,
                         } = truin_tx
-                            .send(EngineCommand {
-                                session: Some(session),
-                                action: EngineAction::GetState(Some(session)),
-                            })
+                            .send(EngineAction::GetState(Some(session)))
                             .await
                             .unwrap()
                         {
@@ -461,7 +406,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
 
     async fn app_receiver(
         mut transport_rx: FramedRead<OwnedReadHalf, LengthDelimitedCodec>,
-        truin_sender_tx: mpsc::UnboundedSender<EngineCommand>,
+        truin_sender_tx: mpsc::UnboundedSender<EngineAction>,
         session: u64,
         team_id: usize,
         player_id: u64,
@@ -489,7 +434,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
     let app_receiver = app_receiver(transport_rx, truin_sender_tx, session, team_id, player_id);
 
     async fn truin_sender(
-        mut rx: mpsc::UnboundedReceiver<EngineCommand>,
+        mut rx: mpsc::UnboundedReceiver<EngineAction>,
         mut truin_tx_2: api::SendConnection,
         internal_tx_2: mpsc::UnboundedSender<ToApp>,
         player_id: u64,
@@ -631,13 +576,10 @@ async fn handle_pictures(mut stream: TcpStream) {
             println!(
                 "{:?}",
                 truin_tx
-                    .send(EngineCommand {
-                        session: Some(session),
-                        action: EngineAction::UploadTeamPicture {
-                            session_id: session,
-                            team_id: team,
-                            picture: pic
-                        }
+                    .send(EngineAction::UploadTeamPicture {
+                        session_id: session,
+                        team_id: team,
+                        picture: pic
                     })
                     .await
                     .unwrap()
@@ -647,12 +589,9 @@ async fn handle_pictures(mut stream: TcpStream) {
             println!(
                 "{:?}",
                 truin_tx
-                    .send(EngineCommand {
-                        session: None,
-                        action: EngineAction::UploadPlayerPicture {
-                            player_id,
-                            picture: pic
-                        }
+                    .send(EngineAction::UploadPlayerPicture {
+                        player_id,
+                        picture: pic
                     })
                     .await
                     .unwrap()
@@ -666,14 +605,11 @@ async fn handle_pictures(mut stream: TcpStream) {
             println!(
                 "{:?}",
                 truin_tx
-                    .send(EngineCommand {
-                        session: Some(session),
-                        action: EngineAction::UploadPeriodPictures {
-                            session_id: session,
-                            pictures: vec![pic],
-                            team,
-                            period: period_id
-                        }
+                    .send(EngineAction::UploadPeriodPictures {
+                        session_id: session,
+                        pictures: vec![pic],
+                        team,
+                        period: period_id
                     })
                     .await
                     .unwrap()

@@ -578,10 +578,7 @@ impl Session {
                 // Set up alarm
                 let (request, timer) = context.engine_context.timer_tracker.alarm(
                     chrono::Local::now().with_time(config.end_time).unwrap(),
-                    InternEngineCommand::Command(Box::new(EngineCommand {
-                        session: Some(context.session_id),
-                        action: Stop(context.session_id),
-                    })),
+                    InternEngineCommand::Command(Box::new(Stop(context.session_id))),
                 );
 
                 // Set up game

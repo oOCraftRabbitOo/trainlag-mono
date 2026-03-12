@@ -1,6 +1,6 @@
 use crate::commands::{
-    BroadcastAction, ClientCommand, EngineAction, EngineAction::*, EngineCommand,
-    EngineCommandPackage, ResponseAction, ResponsePackage,
+    BroadcastAction, ClientCommand, EngineAction, EngineAction::*, EngineCommandPackage,
+    ResponseAction, ResponsePackage,
 };
 use crate::*;
 use bytes::Bytes;
@@ -15,7 +15,7 @@ use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 pub mod error;
 
 struct SendRequest {
-    command: EngineCommand,
+    command: EngineAction,
     response_channel: oneshot::Sender<ResponseAction>,
 }
 
@@ -231,7 +231,7 @@ pub struct SendConnection {
 
 impl SendConnection {
     /// Sends a command to truinlag and receives the corresponding response.
-    pub async fn send(&mut self, command: EngineCommand) -> Result<ResponseAction> {
+    pub async fn send(&mut self, command: EngineAction) -> Result<ResponseAction> {
         let (resp_send, resp_recv) = oneshot::channel();
         let package = SendRequest {
             command,
@@ -245,13 +245,7 @@ impl SendConnection {
     }
 
     pub async fn get_zones(&mut self) -> Result<Vec<Zone>> {
-        match self
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::GetAllZones,
-            })
-            .await
-        {
+        match self.send(EngineAction::GetAllZones).await {
             Ok(response) => match response {
                 ResponseAction::SendZones(zones) => Ok(zones),
                 ResponseAction::Error(err) => Err(Error::Truinlag(err)),
@@ -262,13 +256,7 @@ impl SendConnection {
     }
 
     pub async fn delete_all_challenges(&mut self) -> Result<()> {
-        match self
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::DeleteAllChallenges,
-            })
-            .await
-        {
+        match self.send(EngineAction::DeleteAllChallenges).await {
             Ok(response) => match response {
                 ResponseAction::Success => Ok(()),
                 ResponseAction::Error(err) => Err(Error::Truinlag(err)),
@@ -279,13 +267,7 @@ impl SendConnection {
     }
 
     pub async fn get_global_state(&mut self) -> Result<(Vec<GameSession>, Vec<Player>)> {
-        match self
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::GetState(None),
-            })
-            .await
-        {
+        match self.send(EngineAction::GetState(None)).await {
             Ok(thing) => match thing {
                 ResponseAction::SendGlobalState { sessions, players } => Ok((sessions, players)),
                 other => Err(Error::InvalidSignal(format!("{:?}", other))),
@@ -295,13 +277,7 @@ impl SendConnection {
     }
 
     pub async fn get_raw_challenges(&mut self) -> Result<Vec<RawChallenge>> {
-        match self
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::GetRawChallenges,
-            })
-            .await?
-        {
+        match self.send(EngineAction::GetRawChallenges).await? {
             ResponseAction::Error(err) => Err(Error::Truinlag(err)),
             ResponseAction::SendRawChallenges(challenges) => Ok(challenges),
             other => Err(Error::InvalidSignal(format!("{:?}", other))),
@@ -316,13 +292,7 @@ impl SendConnection {
         if challenge.id.is_none() {
             return Err(Error::InvalidSignal("Provided challenge has no ID".into()));
         }
-        match self
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::SetRawChallenge(challenge),
-            })
-            .await?
-        {
+        match self.send(EngineAction::SetRawChallenge(challenge)).await? {
             ResponseAction::Error(err) => Err(Error::Truinlag(err)),
             ResponseAction::Success => Ok(()),
             other => Err(Error::InvalidSignal(format!("{:?}", other))),
@@ -339,13 +309,7 @@ impl SendConnection {
                 "supplied challenge must have an ID".into(),
             ));
         }
-        match self
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::AddRawChallenge(challenge),
-            })
-            .await?
-        {
+        match self.send(EngineAction::AddRawChallenge(challenge)).await? {
             ResponseAction::Error(err) => Err(Error::Truinlag(err)),
             ResponseAction::Success => Ok(()),
             other => Err(Error::InvalidSignal(format!("{:?}", other))),
@@ -353,13 +317,7 @@ impl SendConnection {
     }
 
     pub async fn add_challenge_set(&mut self, name: String) -> Result<()> {
-        match self
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::AddChallengeSet(name),
-            })
-            .await?
-        {
+        match self.send(EngineAction::AddChallengeSet(name)).await? {
             ResponseAction::Error(err) => Err(Error::Truinlag(err)),
             ResponseAction::Success => Ok(()),
             other => Err(Error::InvalidSignal(format!("{:?}", other))),
@@ -367,13 +325,7 @@ impl SendConnection {
     }
 
     pub async fn get_challenge_sets(&mut self) -> Result<Vec<ChallengeSet>> {
-        match self
-            .send(EngineCommand {
-                session: None,
-                action: GetChallengeSets,
-            })
-            .await?
-        {
+        match self.send(GetChallengeSets).await? {
             ResponseAction::Error(err) => Err(Error::Truinlag(err)),
             ResponseAction::SendChallengeSets(sets) => Ok(sets),
             other => Err(Error::InvalidSignal(format!("{:?}", other))),

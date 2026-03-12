@@ -11,10 +11,7 @@ use bonsaidb::{
 };
 use challenge::{ChallengeEntry, ChallengeSetEntry, InOpenChallenge};
 use error::Result;
-use libtruinlag::{
-    commands::{EngineAction, EngineCommand},
-    *,
-};
+use libtruinlag::{commands::EngineAction, *};
 use log::error;
 use partially::Partial;
 use runtime::{InternEngineCommand, RuntimeRequest, manager};
@@ -45,10 +42,7 @@ pub struct TimerHook {
 impl Default for TimerHook {
     fn default() -> Self {
         Self {
-            payload: InternEngineCommand::Command(Box::new(EngineCommand {
-                action: EngineAction::Ping(None),
-                session: None,
-            })),
+            payload: InternEngineCommand::Command(Box::new(EngineAction::Ping(None))),
             end_time: chrono::Local::now(),
             id: u64::MAX,
         }

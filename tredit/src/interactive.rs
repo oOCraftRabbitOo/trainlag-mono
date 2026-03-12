@@ -87,27 +87,24 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
     for sheet_zone in sheet_zones {
         printnnl(".");
         sender
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::AddZone {
-                    zone: sheet_zone.get("Zone").unwrap().parse().unwrap(),
-                    num_conn_zones: sheet_zone.get("num conn zones").unwrap().parse().unwrap(),
-                    num_connections: sheet_zone.get("num connections").unwrap().parse().unwrap(),
-                    train_through: sheet_zone
-                        .get("train through")
-                        .unwrap()
-                        .to_lowercase()
-                        .parse()
-                        .unwrap(),
-                    mongus: sheet_zone
-                        .get("Mongus")
-                        .unwrap()
-                        .to_lowercase()
-                        .parse()
-                        .unwrap(),
-                    s_bahn_zone: s_bahn_zones
-                        .contains(&sheet_zone.get("Zone").unwrap().parse::<i64>().unwrap()),
-                },
+            .send(EngineAction::AddZone {
+                zone: sheet_zone.get("Zone").unwrap().parse().unwrap(),
+                num_conn_zones: sheet_zone.get("num conn zones").unwrap().parse().unwrap(),
+                num_connections: sheet_zone.get("num connections").unwrap().parse().unwrap(),
+                train_through: sheet_zone
+                    .get("train through")
+                    .unwrap()
+                    .to_lowercase()
+                    .parse()
+                    .unwrap(),
+                mongus: sheet_zone
+                    .get("Mongus")
+                    .unwrap()
+                    .to_lowercase()
+                    .parse()
+                    .unwrap(),
+                s_bahn_zone: s_bahn_zones
+                    .contains(&sheet_zone.get("Zone").unwrap().parse::<i64>().unwrap()),
             })
             .await
             .unwrap();
@@ -145,13 +142,10 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
     for conn in cookednections {
         printnnl(".");
         sender
-            .send(EngineCommand {
-                session: None,
-                action: EngineAction::AddMinutesTo {
-                    from_zone: conn.zone_from,
-                    to_zone: conn.zone_to,
-                    minutes: conn.minutes,
-                },
+            .send(EngineAction::AddMinutesTo {
+                from_zone: conn.zone_from,
+                to_zone: conn.zone_to,
+                minutes: conn.minutes,
             })
             .await
             .unwrap();

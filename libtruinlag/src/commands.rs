@@ -4,14 +4,8 @@ use super::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct EngineCommand {
-    pub session: Option<u64>,
-    pub action: EngineAction,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EngineCommandPackage {
-    pub command: EngineCommand,
+    pub command: EngineAction,
     pub id: u64,
 }
 

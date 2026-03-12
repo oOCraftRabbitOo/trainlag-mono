@@ -1,16 +1,12 @@
 use clap::{Arg, ArgAction, Command, value_parser};
 use clap_complete::{generate, shells::Zsh};
 use colored::Colorize;
-use libtruinlag::{
-    Challenge, PartialGameConfig,
-    api::connect,
-    commands::{EngineAction, EngineCommand},
-};
+use libtruinlag::{Challenge, PartialGameConfig, api::connect, commands::EngineAction};
 
 mod interactive;
 mod parsley;
 
-async fn run_command(command: EngineCommand, address: String) {
+async fn run_command(command: EngineAction, address: String) {
     let (mut sender, _recvr) = connect(Some(&address)).await.unwrap();
     match sender.send(command).await {
         Ok(response) => {
@@ -375,12 +371,9 @@ async fn main() {
                 ..Default::default()
             };
             run_command(
-                EngineCommand {
-                    session: Some(session),
-                    action: EngineAction::SetGameConfig {
-                        session_id: session,
-                        config,
-                    },
+                EngineAction::SetGameConfig {
+                    session_id: session,
+                    config,
                 },
                 address,
             )
@@ -395,12 +388,9 @@ async fn main() {
                 ..Default::default()
             };
             run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::SetGameConfig {
-                        session_id: session.expect("session must be supplied"),
-                        config,
-                    },
+                EngineAction::SetGameConfig {
+                    session_id: session.expect("session must be supplied"),
+                    config,
                 },
                 address,
             )
@@ -415,12 +405,9 @@ async fn main() {
                 ..Default::default()
             };
             run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::SetGameConfig {
-                        session_id: session.expect("session must be supplied"),
-                        config,
-                    },
+                EngineAction::SetGameConfig {
+                    session_id: session.expect("session must be supplied"),
+                    config,
                 },
                 address,
             )
@@ -437,12 +424,9 @@ async fn main() {
                 ..Default::default()
             };
             run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::SetGameConfig {
-                        session_id: session.unwrap(),
-                        config,
-                    },
+                EngineAction::SetGameConfig {
+                    session_id: session.unwrap(),
+                    config,
                 },
                 address,
             )
@@ -459,12 +443,9 @@ async fn main() {
                 ..Default::default()
             };
             run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::SetGameConfig {
-                        session_id: session.unwrap(),
-                        config,
-                    },
+                EngineAction::SetGameConfig {
+                    session_id: session.unwrap(),
+                    config,
                 },
                 address,
             )
@@ -473,97 +454,35 @@ async fn main() {
 
         "get_game_config" => {
             let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::GetGameConfig(session.unwrap()),
-                },
-                address,
-            )
-            .await
+            run_command(EngineAction::GetGameConfig(session.unwrap()), address).await
         }
 
-        "get_challenge_sets" => {
-            run_command(
-                EngineCommand {
-                    session: None,
-                    action: EngineAction::GetChallengeSets,
-                },
-                address,
-            )
-            .await
-        }
+        "get_challenge_sets" => run_command(EngineAction::GetChallengeSets, address).await,
 
         "get_locations" => {
             let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::GetLocations(session.unwrap()),
-                },
-                address,
-            )
-            .await
+            run_command(EngineAction::GetLocations(session.unwrap()), address).await
         }
 
-        "get_zones" => {
-            run_command(
-                EngineCommand {
-                    session: None,
-                    action: EngineAction::GetAllZones,
-                },
-                address,
-            )
-            .await
-        }
+        "get_zones" => run_command(EngineAction::GetAllZones, address).await,
 
         "stop" => {
             let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::Stop(session.unwrap()),
-                },
-                address,
-            )
-            .await
+            run_command(EngineAction::Stop(session.unwrap()), address).await
         }
 
         "start" => {
             let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::Start(session.unwrap()),
-                },
-                address,
-            )
-            .await
+            run_command(EngineAction::Start(session.unwrap()), address).await
         }
 
-        "get_challenges" => {
-            run_command(
-                EngineCommand {
-                    session: None,
-                    action: EngineAction::GetRawChallenges,
-                },
-                address,
-            )
-            .await
-        }
+        "get_challenges" => run_command(EngineAction::GetRawChallenges, address).await,
 
         "delete_challenges" => {
             if sub_args.contains_id("yes")
                 || interactive::get_input("Are you sure (yes/no) ").as_str() == "yes"
             {
-                run_command(
-                    EngineCommand {
-                        session: None,
-                        action: EngineAction::DeleteAllChallenges,
-                    },
-                    address,
-                )
-                .await
+                run_command(EngineAction::DeleteAllChallenges, address).await
             }
         }
 
@@ -577,13 +496,10 @@ async fn main() {
             let team = sub_args.remove_one::<usize>("Team ID").expect("required");
             let name = sub_args.remove_one::<String>("Name").expect("required");
             run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::RenameTeam {
-                        session_id: session.expect("session must be supplied"),
-                        team,
-                        new_name: name,
-                    },
+                EngineAction::RenameTeam {
+                    session_id: session.expect("session must be supplied"),
+                    team,
+                    new_name: name,
                 },
                 address,
             )
@@ -599,16 +515,13 @@ async fn main() {
                 .expect("required");
             let points = sub_args.remove_one::<u64>("Points").expect("required");
             run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::AddChallengeToTeam {
-                        session_id: session.unwrap(),
-                        team,
-                        challenge: Challenge {
-                            title,
-                            description,
-                            points,
-                        },
+                EngineAction::AddChallengeToTeam {
+                    session_id: session.unwrap(),
+                    team,
+                    challenge: Challenge {
+                        title,
+                        description,
+                        points,
                     },
                 },
                 address,
@@ -620,12 +533,9 @@ async fn main() {
             let session = sub_args.remove_one::<u64>("Session ID").expect("required");
             let team = sub_args.remove_one::<usize>("Team ID").expect("required");
             run_command(
-                EngineCommand {
-                    session: Some(session),
-                    action: EngineAction::MakeTeamRunner {
-                        session_id: session,
-                        team_id: team,
-                    },
+                EngineAction::MakeTeamRunner {
+                    session_id: session,
+                    team_id: team,
                 },
                 address,
             )
@@ -636,12 +546,9 @@ async fn main() {
             let session = sub_args.remove_one::<u64>("Session ID").expect("required");
             let team = sub_args.remove_one::<usize>("Team ID").expect("required");
             run_command(
-                EngineCommand {
-                    session: Some(session),
-                    action: EngineAction::MakeTeamCatcher {
-                        session_id: session,
-                        team_id: team,
-                    },
+                EngineAction::MakeTeamCatcher {
+                    session_id: session,
+                    team_id: team,
                 },
                 address,
             )
@@ -650,14 +557,7 @@ async fn main() {
 
         "get_state" => {
             let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::GetState(session),
-                },
-                address,
-            )
-            .await
+            run_command(EngineAction::GetState(session), address).await
         }
 
         "assign" => {
@@ -665,13 +565,10 @@ async fn main() {
             let player = sub_args.remove_one::<u64>("Player ID").expect("required");
             let team = sub_args.remove_one::<usize>("Team ID");
             run_command(
-                EngineCommand {
-                    session,
-                    action: EngineAction::AssignPlayerToTeam {
-                        session_id: session.unwrap(),
-                        player,
-                        team,
-                    },
+                EngineAction::AssignPlayerToTeam {
+                    session_id: session.unwrap(),
+                    player,
+                    team,
                 },
                 address,
             )
@@ -685,14 +582,11 @@ async fn main() {
                 .expect("required")
                 .clone();
             run_command(
-                EngineCommand {
-                    session: Some(*session),
-                    action: EngineAction::AddTeam {
-                        session_id: *session,
-                        name,
-                        discord_channel: None,
-                        colour: None,
-                    },
+                EngineAction::AddTeam {
+                    session_id: *session,
+                    name,
+                    discord_channel: None,
+                    colour: None,
                 },
                 address,
             )
@@ -705,12 +599,9 @@ async fn main() {
                 .expect("required")
                 .clone();
             run_command(
-                EngineCommand {
-                    session: None,
-                    action: EngineAction::AddSession {
-                        name,
-                        mode: libtruinlag::Mode::Traditional,
-                    },
+                EngineAction::AddSession {
+                    name,
+                    mode: libtruinlag::Mode::Traditional,
                 },
                 address,
             )
@@ -724,12 +615,9 @@ async fn main() {
                 .expect("required")
                 .clone();
             run_command(
-                EngineCommand {
-                    session: None,
-                    action: EngineAction::SetPlayerPassphrase {
-                        player: *id,
-                        passphrase,
-                    },
+                EngineAction::SetPlayerPassphrase {
+                    player: *id,
+                    passphrase,
                 },
                 address,
             )
@@ -740,12 +628,9 @@ async fn main() {
             let id = sub_args.get_one::<u64>("Player ID").expect("required");
             let session = sub_args.get_one::<u64>("Session ID").cloned();
             run_command(
-                EngineCommand {
-                    session: None,
-                    action: EngineAction::SetPlayerSession {
-                        player: *id,
-                        session,
-                    },
+                EngineAction::SetPlayerSession {
+                    player: *id,
+                    session,
                 },
                 address,
             )
@@ -763,14 +648,11 @@ async fn main() {
                 .clone();
             let session = sub_args.get_one::<u64>("Session ID").cloned();
             run_command(
-                EngineCommand {
-                    session: None,
-                    action: EngineAction::AddPlayer {
-                        name,
-                        discord_id: None,
-                        passphrase,
-                        session,
-                    },
+                EngineAction::AddPlayer {
+                    name,
+                    discord_id: None,
+                    passphrase,
+                    session,
                 },
                 address,
             )
