@@ -726,7 +726,7 @@ impl Default for Config {
             centre_zone: 110,
             challenge_sets: Vec::new(),
             regio_ratio: 0.4,
-            zkaff_ratio_range: 0.2..1.2,
+            zkaff_ratio_range: 0.3333..1.3333,
             num_catchers: 3,
             num_challenges: 3,
             start_zone: 110,

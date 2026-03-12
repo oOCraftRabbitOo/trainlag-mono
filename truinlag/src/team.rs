@@ -868,7 +868,11 @@ fn get_period(config: &Config) -> GenerationPeriod {
         if now >= end_game_time {
             GenerationPeriod::EndGame
         } else if now >= zürich_time {
-            let ratio = (now - zürich_time).num_minutes() as f64 / config.zkaff_minutes as f64;
+            let ratio = flerp(
+                config.zkaff_ratio_range.start,
+                config.zkaff_ratio_range.end,
+                (now - zürich_time).num_minutes() as f64 / config.zkaff_minutes as f64,
+            );
             GenerationPeriod::ZKaff(ratio)
         } else if now >= perimeter_time {
             let ratio =
@@ -883,4 +887,9 @@ fn get_period(config: &Config) -> GenerationPeriod {
 /// It lerps
 fn lerp(a: u64, b: u64, t: f64) -> u64 {
     (a as f64 + (b as f64 - a as f64) * t) as u64
+}
+
+/// It lerps
+fn flerp(a: f64, b: f64, t: f64) -> f64 {
+    a + (b - a) * t
 }
