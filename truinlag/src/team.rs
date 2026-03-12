@@ -6,7 +6,7 @@ use super::{
     Config, DBEntry,
     challenge::{ChallengeEntry, InOpenChallenge},
 };
-use chrono::{self, Duration as Dur};
+use chrono::{self, Duration as Dur, Timelike};
 use geo::Distance;
 use libtruinlag::{commands::Error, *};
 use log::{error, warn};
@@ -164,7 +164,7 @@ impl TeamEntry {
                         title: title.clone(),
                         description: description.clone(),
                         points: *points,
-                        time: p.end_time,
+                        time: p.end_time.num_seconds_from_midnight(),
                         picture_ids: p.pictures.clone(),
                         id: *id,
                     }),

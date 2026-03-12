@@ -8,7 +8,8 @@ pub mod api;
 
 pub mod commands;
 
-type Timestamp = i64;
+type Timestamp = i64; // seconds since epoch
+type DayTimestamp = u32; // seconds since midnight
 
 #[derive(Partial, Debug, Clone, Serialize, Deserialize)]
 #[partially(derive(Debug, Clone, Serialize, Deserialize, Default))]
@@ -441,7 +442,7 @@ pub struct CompletedChallenge {
     pub title: String,
     pub description: String,
     pub points: u64,
-    pub time: chrono::NaiveTime,
+    pub time: DayTimestamp,
     pub picture_ids: Vec<u64>,
     pub id: u64,
 }
@@ -465,14 +466,14 @@ pub enum Event {
         catcher_id: usize,
         caught_id: usize,
         bounty: u64,
-        time: chrono::NaiveTime,
+        time: DayTimestamp,
         picture_ids: Vec<u64>,
         location: MinimalLocation,
     },
     Complete {
         challenge: Challenge,
         completer_id: usize,
-        time: chrono::NaiveTime,
+        time: DayTimestamp,
         picture_ids: Vec<u64>,
         location: MinimalLocation,
     },

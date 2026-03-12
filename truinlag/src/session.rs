@@ -558,7 +558,7 @@ impl Session {
 
                 // Set up teams
                 let team_ids = 0..self.teams.len();
-                let catcher_ids = team_ids.clone().choose_multiple(&mut rng(), num_catchers);
+                let catcher_ids = team_ids.clone().sample(&mut rng(), num_catchers);
                 let runner_ids: Vec<usize> =
                     team_ids.filter(|i| !catcher_ids.contains(i)).collect();
                 for id in catcher_ids {
@@ -678,7 +678,7 @@ impl Session {
                         },
                         completer_id: team_id,
                         picture_ids: period.pictures.clone(),
-                        time: period.end_time,
+                        time: period.end_time.num_seconds_from_midnight(),
                         location: team
                             .locations
                             .get(period.location_end_index)
@@ -693,7 +693,7 @@ impl Session {
                         caught_id: *caught_team,
                         bounty: *bounty,
                         picture_ids: period.pictures.clone(),
-                        time: period.end_time,
+                        time: period.end_time.num_seconds_from_midnight(),
                         location: team
                             .locations
                             .get(period.location_end_index)

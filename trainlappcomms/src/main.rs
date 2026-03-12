@@ -1,4 +1,3 @@
-use chrono::NaiveTime;
 use futures::prelude::*;
 use libtlc::*;
 use libtruinlag::TeamRole;
@@ -133,7 +132,7 @@ async fn broadcast_to_to_app(
                         catcher_id: catcher.id,
                         caught_id: caught.id,
                         bounty: 0,
-                        time: NaiveTime::MIN,
+                        time: 0,
                         picture_ids: Vec::new(),
                         location: MinimalLocation {
                             latitude: 0_f32,
@@ -153,7 +152,7 @@ async fn broadcast_to_to_app(
             let event = Event::Complete {
                 challenge: completed,
                 completer_id: completer.id,
-                time: NaiveTime::MIN,
+                time: 0,
                 picture_ids: Vec::new(),
                 location: MinimalLocation {
                     latitude: 0_f32,
