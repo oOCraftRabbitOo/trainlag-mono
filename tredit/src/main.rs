@@ -328,6 +328,30 @@ fn cli() -> Command {
             Command::new("print_address")
                 .about("print the socket address used to contact truinlag"),
         )
+        .subcommand(
+            Command::new("remove_team")
+                .about("Remove a team")
+                .arg(
+                    Arg::new("Session ID")
+                        .required(true)
+                        .value_parser(value_parser!(u64)),
+                )
+                .arg(
+                    Arg::new("Team ID")
+                        .required(true)
+                        .value_parser(value_parser!(usize)),
+                ),
+        )
+        .subcommand(
+            Command::new("rename_player")
+                .about("Rename a player")
+                .arg(
+                    Arg::new("Player ID")
+                        .required(true)
+                        .value_parser(value_parser!(u64)),
+                )
+                .arg(Arg::new("Name").required(true)),
+        )
 }
 
 #[tokio::main]
@@ -355,6 +379,32 @@ async fn main() {
     };
 
     match name.as_str() {
+        "rename_player" => {
+            {
+                let player_id = sub_args.remove_one("Player ID").expect("required");
+                let name = sub_args.remove_one("Name").expect("required");
+                run_command(
+                    EngineAction::RenamePlayer {
+                        player_id,
+                        new_name: name,
+                    },
+                    address,
+                )
+            }
+            .await
+        }
+        "remove_team" => {
+            let session_id = sub_args.remove_one("Session ID").expect("required");
+            let team_id = sub_args.remove_one("Team ID").expect("required");
+            run_command(
+                EngineAction::RemoveTeam {
+                    session_id,
+                    team_id,
+                },
+                address,
+            )
+            .await
+        }
         "print_address" => {
             println!("{}", address);
         }
