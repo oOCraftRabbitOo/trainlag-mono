@@ -395,22 +395,29 @@ impl Session {
                     }
                 };
                 let period_id;
-                match self.teams.get_mut(catcher) {
-                    Some(catcher_team) => {
-                        period_id = catcher_team.periods.len();
-                        runtime_requests
-                            .push(catcher_team.have_caught(bounty, caught, catcher, context));
-                    }
-                    None => {
-                        return Error(NotFound(format!("catcher team with id {}", catcher))).into();
-                    }
-                }
+                let caught_zone;
                 match self.teams.get_mut(caught) {
                     Some(caught_team) => {
+                        caught_zone = caught_team.current_zone_id;
                         caught_team.be_caught(catcher);
                     }
                     None => {
                         return Error(NotFound(format!("caught team with id {}", caught))).into();
+                    }
+                }
+                match self.teams.get_mut(catcher) {
+                    Some(catcher_team) => {
+                        period_id = catcher_team.periods.len();
+                        runtime_requests.push(catcher_team.have_caught(
+                            bounty,
+                            caught,
+                            catcher,
+                            caught_zone,
+                            context,
+                        ));
+                    }
+                    None => {
+                        return Error(NotFound(format!("catcher team with id {}", catcher))).into();
                     }
                 }
                 InternEngineResponsePackage {
