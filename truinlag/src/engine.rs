@@ -18,13 +18,14 @@ use bonsaidb::{
         config::{self, Builder},
     },
 };
+use chrono::TimeDelta;
 use libtruinlag::{
     commands::{
         BroadcastAction::*, EngineAction::*, EngineResponse, Error::*, ResponseAction::*, *,
     },
     *,
 };
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::{
     collections::HashMap,
     path::Path,
@@ -454,6 +455,9 @@ impl Engine {
                                         )
                                     }
                                 }
+
+                                let milis = now.elapsed().as_millis();
+                                debug!("Autosaved in {} ms", milis);
 
                                 autosave_in_progress.store(false, Ordering::Relaxed);
                                 autosave_done.notify_waiters();

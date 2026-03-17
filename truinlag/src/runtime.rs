@@ -16,6 +16,9 @@ use tokio::{
 
 pub type InternEngineResponseResult = Result<InternEngineResponsePackage, Error>;
 
+const SEND_ERROR: &str =
+    "Engine: The broadcast channel should never be closed because of `_broadcast_rx_staller`";
+
 #[derive(Debug)]
 pub enum EngineSignal {
     Command {
@@ -319,137 +322,144 @@ pub async fn manager() -> Result<()> {
     Ok(())
 }
 
+/// Takes runtime requests and returns JoinHnadles to tokio tasks
+///
+/// The precise return type of this function is a vector of `(Option<u64>, JoinHandle)`s. Each
+/// tuple stands for a task. Each tuple obviously contains a JoinHandle, but some also contain an
+/// id. This id is given to timers. This way, the engine can edit them through runtime requests. It
+/// also happens that only timers have ids and all timers have ids, so it is save to cancel tasks
+/// with ids.
+async fn handle_runtime_requests(
+    requests: Option<Vec<RuntimeRequest>>,
+    mpsc_sender: &mpsc::Sender<EngineSignal>,
+) -> Vec<(Option<u64>, JoinHandle<()>)> {
+    let mut handles = Vec::new();
+    if let Some(requests) = requests {
+        for request in requests {
+            match request {
+                RuntimeRequest::CreateTimer {
+                    duration,
+                    payload,
+                    id,
+                } => {
+                    let sender = mpsc_sender.clone();
+                    let timer_task = tokio::spawn(async move {
+                        tokio::time::sleep(duration).await;
+                        sender
+                            .send(EngineSignal::RawLoopbackCommand(payload))
+                            .await
+                            .unwrap()
+                    });
+                    handles.push((Some(id), timer_task));
+                }
+                RuntimeRequest::CreateAlarm { time, payload, id } => {
+                    let sender = mpsc_sender.clone();
+                    let alarm_task = tokio::spawn(async move {
+                        tokio::time::sleep(
+                            (time - chrono::offset::Local::now())
+                                .to_std()
+                                .unwrap_or(Duration::ZERO),
+                        )
+                        .await;
+                        sender
+                            .send(EngineSignal::RawLoopbackCommand(payload))
+                            .await
+                            .unwrap()
+                    });
+                    handles.push((Some(id), alarm_task));
+                }
+                RuntimeRequest::RawLoopback(handle) => {
+                    let sender = mpsc_sender.clone();
+                    let task = tokio::spawn(async move {
+                        match handle.await {
+                            Ok(command) => sender
+                                .send(EngineSignal::RawLoopbackCommand(command))
+                                .await
+                                .unwrap(),
+                            Err(err) => {
+                                error!(
+                                    "Runtime: there was a problem executing raw loopback, sending shutdown signal: {}",
+                                    err
+                                );
+                                sender.send(EngineSignal::Shutdown).await.unwrap()
+                            }
+                        }
+                    });
+                    handles.push((None, task));
+                }
+                RuntimeRequest::CancelTimer(id) => {
+                    handles.retain(|(i, _)| match i {
+                        None => true,
+                        Some(i) => i != &id,
+                    });
+                }
+            }
+        }
+    }
+    handles
+}
+
+async fn handle_intern_response(
+    response: InternEngineResponsePackage,
+    broadcast_handle: &broadcast::Sender<IOSignal>,
+    channel: oneshot::Sender<IOSignal>,
+    mpsc_sender: mpsc::Sender<EngineSignal>,
+    id: u64,
+) -> Vec<(Option<u64>, JoinHandle<()>)> {
+    let mut handles = handle_runtime_requests(response.runtime_requests, &mpsc_sender).await;
+    match response.response {
+        InternEngineResponse::DirectResponse(response) => {
+            if let Some(action) = response.broadcast_action {
+                let message = IOSignal::Command(ClientCommand::Broadcast(action));
+                if broadcast_handle.is_full() {
+                    warn!(
+                        "Engine: broadcast full, {} receivers",
+                        broadcast_handle.receiver_count()
+                    )
+                }
+                if let Err(err) = broadcast_handle.broadcast_direct(message).await {
+                    error!("{}: {}", SEND_ERROR, err);
+                };
+            }
+            channel.send(IOSignal::Command(ClientCommand::Response(ResponsePackage {
+                    action: response.response_action,
+                    id
+                }))).unwrap_or_else(|_err| warn!("Engine: Couldn't send response to IO task, assuming client disconnect and continuing"));
+        }
+        InternEngineResponse::DelayedLoopback(handle) => {
+            let task = tokio::spawn(async move {
+                match handle.await {
+                    Ok(command) => {
+                        mpsc_sender
+                            .send(EngineSignal::LoopbackCommand {
+                                command,
+                                id,
+                                channel,
+                            })
+                            .await
+                            .unwrap();
+                    }
+                    Err(err) => {
+                        error!(
+                            "Runtime: there was an error executing delayed loopback, sending shutdown: {}",
+                            err
+                        );
+                        mpsc_sender.send(EngineSignal::Shutdown).await.unwrap();
+                    }
+                }
+            });
+            handles.push((None, task));
+        }
+    }
+    handles
+}
+
 async fn engine(
     mut mpsc_handle: mpsc::Receiver<EngineSignal>,
     broadcast_handle: broadcast::Sender<IOSignal>,
     oneshot_handle: oneshot::Sender<()>,
     mpsc_sender: mpsc::Sender<EngineSignal>,
 ) -> Result<()> {
-    const SEND_ERROR: &str =
-        "Engine: The broadcast channel should never be closed because of `_broadcast_rx_staller`";
-    async fn handle_runtime_requests(
-        requests: Option<Vec<RuntimeRequest>>,
-        mpsc_sender: &mpsc::Sender<EngineSignal>,
-    ) -> Vec<(Option<u64>, JoinHandle<()>)> {
-        let mut handles = Vec::new();
-        if let Some(requests) = requests {
-            for request in requests {
-                match request {
-                    RuntimeRequest::CreateTimer {
-                        duration,
-                        payload,
-                        id,
-                    } => {
-                        let sender = mpsc_sender.clone();
-                        let timer_task = tokio::spawn(async move {
-                            tokio::time::sleep(duration).await;
-                            sender
-                                .send(EngineSignal::RawLoopbackCommand(payload))
-                                .await
-                                .unwrap()
-                        });
-                        handles.push((Some(id), timer_task));
-                    }
-                    RuntimeRequest::CreateAlarm { time, payload, id } => {
-                        let sender = mpsc_sender.clone();
-                        let alarm_task = tokio::spawn(async move {
-                            tokio::time::sleep(
-                                (time - chrono::offset::Local::now())
-                                    .to_std()
-                                    .unwrap_or(Duration::ZERO),
-                            )
-                            .await;
-                            sender
-                                .send(EngineSignal::RawLoopbackCommand(payload))
-                                .await
-                                .unwrap()
-                        });
-                        handles.push((Some(id), alarm_task));
-                    }
-                    RuntimeRequest::RawLoopback(handle) => {
-                        let sender = mpsc_sender.clone();
-                        let task = tokio::spawn(async move {
-                            match handle.await {
-                                Ok(command) => sender
-                                    .send(EngineSignal::RawLoopbackCommand(command))
-                                    .await
-                                    .unwrap(),
-                                Err(err) => {
-                                    error!(
-                                        "Runtime: there was a problem executing raw loopback, sending shutdown signal: {}",
-                                        err
-                                    );
-                                    sender.send(EngineSignal::Shutdown).await.unwrap()
-                                }
-                            }
-                        });
-                        handles.push((None, task));
-                    }
-                    RuntimeRequest::CancelTimer(id) => {
-                        handles.retain(|(i, _)| match i {
-                            None => true,
-                            Some(i) => i != &id,
-                        });
-                    }
-                }
-            }
-        }
-        handles
-    }
-    async fn handle_intern_response(
-        response: InternEngineResponsePackage,
-        broadcast_handle: &broadcast::Sender<IOSignal>,
-        channel: oneshot::Sender<IOSignal>,
-        mpsc_sender: mpsc::Sender<EngineSignal>,
-        id: u64,
-    ) -> Vec<(Option<u64>, JoinHandle<()>)> {
-        let mut handles = handle_runtime_requests(response.runtime_requests, &mpsc_sender).await;
-        match response.response {
-            InternEngineResponse::DirectResponse(response) => {
-                if let Some(action) = response.broadcast_action {
-                    let message = IOSignal::Command(ClientCommand::Broadcast(action));
-                    if broadcast_handle.is_full() {
-                        warn!(
-                            "Engine: broadcast full, {} receivers",
-                            broadcast_handle.receiver_count()
-                        )
-                    }
-                    if let Err(err) = broadcast_handle.broadcast_direct(message).await {
-                        error!("{}: {}", SEND_ERROR, err);
-                    };
-                }
-                channel.send(IOSignal::Command(ClientCommand::Response(ResponsePackage {
-                    action: response.response_action,
-                    id
-                }))).unwrap_or_else(|_err| warn!("Engine: Couldn't send response to IO task, assuming client disconnect and continuing"));
-            }
-            InternEngineResponse::DelayedLoopback(handle) => {
-                let task = tokio::spawn(async move {
-                    match handle.await {
-                        Ok(command) => {
-                            mpsc_sender
-                                .send(EngineSignal::LoopbackCommand {
-                                    command,
-                                    id,
-                                    channel,
-                                })
-                                .await
-                                .unwrap();
-                        }
-                        Err(err) => {
-                            error!(
-                                "Runtime: there was an error executing delayed loopback, sending shutdown: {}",
-                                err
-                            );
-                            mpsc_sender.send(EngineSignal::Shutdown).await.unwrap();
-                        }
-                    }
-                });
-                handles.push((None, task));
-            }
-        }
-        handles
-    }
     let mut engine = tokio::task::block_in_place(|| engine::Engine::init(Path::new("truintabase")));
     let mut handles = handle_runtime_requests(engine.setup().runtime_requests, &mpsc_sender).await;
     loop {
@@ -509,7 +519,7 @@ async fn engine(
                         Some(_) => handle.abort(),
                     }
                 }
-                info!("Engine: tasks awaited, breaking loop");
+                info!("Engine: tasks awaited, breaking engine loop");
                 break;
             }
             EngineSignal::RawLoopbackCommand(command) => {
