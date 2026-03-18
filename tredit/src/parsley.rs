@@ -206,7 +206,7 @@ pub fn parse_record(
         .get("zone")
         .context("field \"zone\" not found")?
         .trim();
-    if !zone_text.is_empty() {
+    if !(zone_text.is_empty() || zone_text == "%z" || zone_text == "%s") {
         for zone in zone_text.split(",").map(|s| s.trim()) {
             let zone = zone.parse().context("couldn't parse a zone")?;
             zones.push(
