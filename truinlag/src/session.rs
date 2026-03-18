@@ -706,12 +706,14 @@ impl Session {
                         zone: _,
                         points,
                         id: _,
+                        not_completed,
                     } => Some(Event::Complete {
                         challenge: Challenge {
                             title: title.clone(),
                             description: description.clone(),
                             points: *points,
                         },
+                        not_completed: not_completed.clone(),
                         completer_id: team_id,
                         picture_ids: period.pictures.clone(),
                         time: period.end_time.num_seconds_from_midnight(),
@@ -721,12 +723,13 @@ impl Session {
                             .unwrap()
                             .clone(),
                     }),
-                    PeriodContext::Catcher {
-                        caught_team,
+                    PeriodContext::Caught {
+                        catcher_team,
                         bounty,
+                        not_completed,
                     } => Some(Event::Catch {
-                        catcher_id: team_id,
-                        caught_id: *caught_team,
+                        catcher_id: *catcher_team,
+                        caught_id: team_id,
                         bounty: *bounty,
                         picture_ids: period.pictures.clone(),
                         time: period.end_time.num_seconds_from_midnight(),
@@ -735,13 +738,14 @@ impl Session {
                             .get(period.location_end_index)
                             .unwrap()
                             .clone(),
+                        not_completed: not_completed.clone(),
                     }),
                     PeriodContext::Trophy {
                         trophies: _,
                         points_spent: _,
                     }
-                    | PeriodContext::Caught {
-                        catcher_team: _,
+                    | PeriodContext::Catcher {
+                        caught_team: _,
                         bounty: _,
                     } => None,
                 }

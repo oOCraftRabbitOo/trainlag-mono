@@ -136,6 +136,7 @@ async fn broadcast_to_to_app(
                             longitude: 0_f32,
                             timestamp: 0,
                         },
+                        not_completed: Vec::new(),
                     },
                     everything,
                 ))
@@ -156,6 +157,7 @@ async fn broadcast_to_to_app(
                     longitude: 0_f32,
                     timestamp: 0,
                 },
+                not_completed: Vec::new(),
             };
             if completer.id == team_id {
                 Some(ToApp::ChallengeCompleted(event, everything))

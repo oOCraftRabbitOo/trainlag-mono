@@ -60,6 +60,8 @@ pub enum PeriodContext {
     Caught {
         catcher_team: usize, // the id of the team that was the catcher
         bounty: u64,         // the bounty handed over to said team
+        #[serde(default)]
+        not_completed: Vec<Challenge>, // the challenges the caught team couldn't finish
     },
     Catcher {
         caught_team: usize, // the id of the team that was caught
@@ -71,6 +73,8 @@ pub enum PeriodContext {
         zone: Option<u64>,   // the zone of the completed challenge
         points: u64,         // the points earned by completing the challenge
         id: u64,
+        #[serde(default)]
+        not_completed: Vec<Challenge>,
     },
 }
 
@@ -160,12 +164,14 @@ impl TeamEntry {
                         points,
                         id,
                         zone: _,
+                        not_completed,
                     } => Some(CompletedChallenge {
                         title: title.clone(),
                         description: description.clone(),
                         points: *points,
                         time: p.end_time.num_seconds_from_midnight(),
                         picture_ids: p.pictures.clone(),
+                        not_completed: not_completed.clone(),
                         id: *id,
                     }),
                     _ => None,
@@ -386,6 +392,7 @@ impl TeamEntry {
                         description: _,
                         zone: _,
                         points: _,
+                        not_completed: _,
                         id,
                     } => Some(id),
                     _ => None,
@@ -769,6 +776,7 @@ impl TeamEntry {
         self.new_period(PeriodContext::Caught {
             catcher_team: catcher_id,
             bounty: self.bounty,
+            not_completed: self.challenges.iter().map(|c| c.to_sendable()).collect(),
         });
         self.bounty = 0;
     }
@@ -829,6 +837,12 @@ impl TeamEntry {
                     zone: completed.zone,
                     points: completed.points,
                     id: completed.id,
+                    not_completed: self
+                        .challenges
+                        .iter()
+                        .filter(|c| c.id != completed.id)
+                        .map(|c| c.to_sendable())
+                        .collect(),
                 });
                 if let Some(zone) = completed.zone {
                     self.current_zone_id = zone;

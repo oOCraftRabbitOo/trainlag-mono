@@ -450,6 +450,7 @@ pub struct CompletedChallenge {
     pub points: u64,
     pub time: DayTimestamp,
     pub picture_ids: Vec<u64>,
+    pub not_completed: Vec<Challenge>,
     pub id: u64,
 }
 
@@ -469,15 +470,24 @@ pub struct Game {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Event {
     Catch {
+        /// the id of the catcher team
         catcher_id: usize,
+        /// the id of the caught team
         caught_id: usize,
+        /// the bounty transferred during the catch
         bounty: u64,
+        /// the time the catch occurred at
         time: DayTimestamp,
+        /// the ids of the pictures associated with the catch
         picture_ids: Vec<u64>,
+        /// the location the catch occurred at
         location: MinimalLocation,
+        /// the challenges the caught team couldn't complete
+        not_completed: Vec<Challenge>,
     },
     Complete {
         challenge: Challenge,
+        not_completed: Vec<Challenge>,
         completer_id: usize,
         time: DayTimestamp,
         picture_ids: Vec<u64>,
@@ -495,11 +505,13 @@ impl PartialEq for Event {
                 picture_ids: _,
                 time,
                 location: _,
+                not_completed: _,
             } => time,
             Event::Complete {
                 challenge: _,
                 completer_id: _,
                 picture_ids: _,
+                not_completed: _,
                 time,
                 location: _,
             } => time,
@@ -512,9 +524,11 @@ impl PartialEq for Event {
                 picture_ids: _,
                 time,
                 location: _,
+                not_completed: _,
             } => time,
             Event::Complete {
                 challenge: _,
+                not_completed: _,
                 completer_id: _,
                 picture_ids: _,
                 time,
@@ -543,9 +557,11 @@ impl Ord for Event {
                 picture_ids: _,
                 time,
                 location: _,
+                not_completed: _,
             } => time,
             Event::Complete {
                 challenge: _,
+                not_completed: _,
                 completer_id: _,
                 picture_ids: _,
                 time,
@@ -560,8 +576,10 @@ impl Ord for Event {
                 picture_ids: _,
                 time,
                 location: _,
+                not_completed: _,
             } => time,
             Event::Complete {
+                not_completed: _,
                 challenge: _,
                 completer_id: _,
                 picture_ids: _,
