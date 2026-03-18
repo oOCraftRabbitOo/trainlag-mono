@@ -360,15 +360,22 @@ impl InputChallenge {
                 "is Kaff or ZKaff, but doesn't have place",
             )));
         };
-        if matches!(self.kind, Kaff | Ortsspezifisch) {
+        if matches!(self.kind, Kaff | Ortsspezifisch) && self.random_place.is_none() {
             if self.kaffskala.is_none() {
-                return Err("is Kaff or Ortsspezifisch, but doesn't have kaffskala".into());
+                return Err(
+                    "is Kaff or Ortsspezifisch without random place, but doesn't have kaffskala"
+                        .into(),
+                );
             }
             if self.grade.is_none() {
-                return Err("is Kaff or Ortsspezifisch, but doesn't have grade".into());
+                return Err(
+                    "is Kaff or Ortsspezifisch without random place, but doesn't have grade".into(),
+                );
             }
             if self.zone.is_empty() {
-                return Err("is Kaff or Ortsspezifisch, but doesn't have zone".into());
+                return Err(
+                    "is Kaff or Ortsspezifisch without random place, but doesn't have zone".into(),
+                );
             }
         }
         if matches!(self.kind, ZKaff) {
