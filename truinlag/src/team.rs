@@ -211,9 +211,7 @@ impl TeamEntry {
                 //         }
                 //     }
                 // }
-
                 let time_since_last_location = location.timestamp - old_location.timestamp;
-
                 if location.accuracy < 20
                     || (location.accuracy as f32 / old_location.accuracy as f32) < 1.0
                     || (time_since_last_location > 15
@@ -225,7 +223,6 @@ impl TeamEntry {
                         .insert(by_player, (total_count + 1, accepted_count + 1));
                     return Some(self.definitely_add_location(location, by_player));
                 }
-
                 None
             }
         }
@@ -783,9 +780,11 @@ impl TeamEntry {
         bounty: u64,
         caught_id: usize,
         catcher_id: usize,
+        caught_zone: u64,
         context: &mut SessionContext,
     ) -> RuntimeRequest {
         self.points += bounty;
+        self.current_zone_id = caught_zone;
         self.bounty = 0;
         self.generate_challenges(context);
         self.role = TeamRole::Runner;
