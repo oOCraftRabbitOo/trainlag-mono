@@ -205,18 +205,6 @@ impl TeamEntry {
         match self.current_location.clone() {
             None => Some(self.definitely_add_location(location, by_player)),
             Some(old_location) => {
-                //// Was not very effective in practice
-                // match self.location_sending_player {
-                //     None => {
-                //         self.location_sending_player = Some(by_player);
-                //         return Some(self.definitely_add_location(location, by_player));
-                //     }
-                //     Some(player) => {
-                //         if by_player == player {
-                //             return Some(self.definitely_add_location(location, by_player));
-                //         }
-                //     }
-                // }
                 let time_since_last_location = location.timestamp - old_location.timestamp;
                 if location.accuracy < 20
                     || (location.accuracy as f32 / old_location.accuracy as f32) < 1.0
@@ -267,6 +255,39 @@ impl TeamEntry {
         self.current_location
             .clone()
             .map(|l| (l.latitude, l.longitude))
+    }
+
+    pub fn seen_challenges(&self) -> Vec<Challenge> {
+        let mut ret = Vec::new();
+        for p in &self.periods {
+            match &p.context {
+                PeriodContext::CompletedChallenge {
+                    title,
+                    description,
+                    zone: _,
+                    points,
+                    id,
+                    not_completed,
+                } => {
+                    ret.push(Challenge {
+                        title: title.clone(),
+                        description: description.clone(),
+                        points: *points,
+                        id: *id,
+                    });
+                    ret.append(&mut not_completed.clone());
+                }
+                PeriodContext::Caught {
+                    catcher_team: _,
+                    bounty: _,
+                    not_completed,
+                } => {
+                    ret.append(&mut not_completed.clone());
+                }
+                _ => (),
+            }
+        }
+        ret
     }
 
     /// Resets the team and has it start out as a gatherer team
@@ -400,6 +421,12 @@ impl TeamEntry {
                 .all(|i| *i != c.id)
         });
 
+        let mut seen_ids: Vec<u64> = self.seen_challenges().iter().map(|c| c.id).collect();
+        seen_ids.sort();
+        seen_ids.dedup();
+        let not_seen_filter: Filter =
+            Rc::new(move |c| -> bool { seen_ids.binary_search(&c.id).is_err() });
+
         let specific_filter: Filter = Rc::new(|c| -> bool {
             matches!(
                 c.contents.kind,
@@ -456,6 +483,14 @@ impl TeamEntry {
             |filters: Vec<Filter>, already_in_filter: Filter, gc: GC| -> Option<InOpenChallenge> {
                 let combined_filter: Filter = Rc::new(move |c| filters.iter().all(|f| f(c)));
                 let filter_list_list: Vec<Vec<Filter>> = vec![
+                    vec![
+                        already_in_filter.clone(),
+                        approved_status_filter.clone(),
+                        challenge_set_filter.clone(),
+                        not_completed_filter.clone(),
+                        not_seen_filter.clone(),
+                        combined_filter.clone(),
+                    ],
                     vec![
                         already_in_filter.clone(),
                         approved_status_filter.clone(),

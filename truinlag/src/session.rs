@@ -705,13 +705,14 @@ impl Session {
                         description,
                         zone: _,
                         points,
-                        id: _,
+                        id,
                         not_completed,
                     } => Some(Event::Complete {
                         challenge: Challenge {
                             title: title.clone(),
                             description: description.clone(),
                             points: *points,
+                            id: *id,
                         },
                         not_completed: not_completed.clone(),
                         completer_id: team_id,

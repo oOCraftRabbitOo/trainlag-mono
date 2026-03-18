@@ -441,6 +441,7 @@ pub struct Challenge {
     pub title: String,
     pub description: String,
     pub points: u64,
+    pub id: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

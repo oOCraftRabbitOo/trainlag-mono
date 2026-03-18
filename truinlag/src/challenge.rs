@@ -609,6 +609,7 @@ impl InOpenChallenge {
             title: self.title.clone(),
             points: self.points,
             description: self.description.clone(),
+            id: self.id,
         }
     }
 }

@@ -572,6 +572,7 @@ async fn main() {
                         title,
                         description,
                         points,
+                        id: 0,
                     },
                 },
                 address,
