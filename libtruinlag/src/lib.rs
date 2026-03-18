@@ -394,8 +394,8 @@ impl InputChallenge {
                 return Err("is neither Kaff nor ZKaff, but has no title".into());
             }
         }
-        if matches!(self.kind, ZKaff | Kaff | Ortsspezifisch) && self.random_place.is_some() {
-            return Err("is ortsspezifisch, but has random place".into());
+        if !matches!(self.kind, Ortsspezifisch) && self.random_place.is_some() {
+            return Err("has random place, but is not ortsspezifisch".into());
         }
         Ok(())
     }
