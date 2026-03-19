@@ -522,15 +522,15 @@ impl Engine {
         ))
     }
 
-    fn get_all_zones(&self) -> InternEngineResponsePackage {
-        SendZones(
+    fn get_all_zones(&self) -> InternEngineResponseResult {
+        Ok(SendZones(
             self.zones
                 .get_all()
                 .iter()
-                .map(|z| z.contents.to_sendable(z.id))
-                .collect(),
+                .map(|z| z.contents.to_sendable(z.id, &self.sectors))
+                .collect::<Result<Vec<Zone>, commands::Error>>()?,
         )
-        .into()
+        .into())
     }
 
     fn add_zone(
@@ -550,6 +550,7 @@ impl Engine {
             mongus,
             s_bahn_zone,
             minutes_to: HashMap::new(),
+            close_sectors: Vec::new(),
         });
         Success.into()
     }
@@ -580,7 +581,7 @@ impl Engine {
                             c.id,
                             &self.challenge_sets.get_all(),
                             &self.zones.get_all(),
-                            &self.sectors.get_all(),
+                            &self.sectors,
                         )
                         .ok()
                 })
@@ -945,11 +946,37 @@ impl Engine {
                 Some(challenge) => challenge.contents.sectors.retain(|s| s != &sector_id),
             }
         }
+        loop {
+            match self
+                .zones
+                .find_mut(|z| z.close_sectors.contains(&sector_id))
+            {
+                None => break,
+                Some(zone) => zone.contents.close_sectors.retain(|s| s != &sector_id),
+            }
+        }
+        Ok(Success.into())
+    }
+
+    fn set_close_sectors(
+        &mut self,
+        zone_id: u64,
+        sector_ids: Vec<u64>,
+    ) -> InternEngineResponseResult {
+        // check if sectors actually exists
+        for sector_id in &sector_ids {
+            let _ = self.sectors.get(*sector_id)?;
+        }
+        self.zones.get_mut(zone_id)?.contents.close_sectors = sector_ids;
         Ok(Success.into())
     }
 
     fn handle_action(&mut self, action: EngineAction) -> InternEngineResponseResult {
         match action {
+            SetCloseSectors {
+                zone_id,
+                sector_ids,
+            } => self.set_close_sectors(zone_id, sector_ids),
             RemoveSector(sector_id) => self.remove_sector(sector_id),
             RemoveNeighbourhood(one, other) => self.remove_neighbourhood(one, other),
             GetSectors => self.get_sectors(),
@@ -967,7 +994,7 @@ impl Engine {
             UploadPlayerPicture { player_id, picture } => {
                 self.upload_player_picture(player_id, picture)
             }
-            GetAllZones => Ok(self.get_all_zones()),
+            GetAllZones => self.get_all_zones(),
             AddZone {
                 zone,
                 num_conn_zones,

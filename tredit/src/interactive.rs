@@ -85,7 +85,7 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
         110, 112, 117, 120, 121, 132, 133, 134, 141, 142, 151, 154, 155, 156, 180, 181,
     ];
     printnnl("adding missing zones");
-    for sheet_zone in sheet_zones {
+    for sheet_zone in &sheet_zones {
         printnnl(".");
         sender
             .send(EngineAction::AddZone {
@@ -211,6 +211,35 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
         }
     }
     println!("  done!");
+
+    printnnl("resetting close sectors of zones...");
+    for truin_zone in &truin_zones {
+        let sheet_zone = sheet_zones
+            .iter()
+            .find(|z| z.get("Zone").unwrap().parse::<u64>().unwrap() == truin_zone.zone)
+            .unwrap();
+        let mut zone_sector_ids: Vec<u64> = sheet_zone
+            .get("sectors")
+            .unwrap()
+            .trim()
+            .chars()
+            .map(|c| truin_sectors.iter().find(|s| s.name == c).unwrap().id)
+            .collect();
+        zone_sector_ids.sort();
+        let mut truin_close_sectors: Vec<u64> =
+            truin_zone.close_sectors.iter().map(|s| s.id).collect();
+        truin_close_sectors.sort();
+        if zone_sector_ids != truin_close_sectors {
+            printnnl(".");
+            sender
+                .send(EngineAction::SetCloseSectors {
+                    zone_id: truin_zone.id,
+                    sector_ids: zone_sector_ids,
+                })
+                .await
+                .unwrap();
+        }
+    }
 
     printnnl("fetching UC4 challenge data...");
     let records = get_data(CHALLENGE_SHEET).await;

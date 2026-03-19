@@ -1,4 +1,4 @@
-use crate::{DBEntry, SectorEntry, SessionContext, ZoneEntry};
+use crate::{DBEntry, DBMirror, SectorEntry, SessionContext, ZoneEntry};
 use bonsaidb::core::{
     document::{CollectionDocument, Emit},
     schema::{
@@ -112,7 +112,7 @@ impl ChallengeEntry {
         id: u64,
         challenge_sets: &[DBEntry<ChallengeSetEntry>],
         zone_entries: &[DBEntry<ZoneEntry>],
-        sector_entries: &[DBEntry<SectorEntry>],
+        sector_entries: &DBMirror<SectorEntry>,
     ) -> Result<RawChallenge, commands::Error> {
         Ok(RawChallenge {
             kind: self.kind,
@@ -140,7 +140,7 @@ impl ChallengeEntry {
                     zones.push({
                         let zone = zone_entries.iter().find(|z| z.id == s).ok_or_else(|| {
                             error!("Couldn't find zone with id {} in db, maybe it was improperly removed?", s);
-                            commands::Error::InternalError})?; zone.contents.to_sendable(zone.id)});
+                            commands::Error::InternalError})?; zone.contents.to_sendable(zone.id, sector_entries)?});
                 }
                 zones
             },
@@ -148,7 +148,8 @@ impl ChallengeEntry {
                 let mut sectors = Vec::new();
                 for s in self.sectors.clone() {
                     sectors.push({
-                        let sector = sector_entries.iter().find(|ss| ss.id == s).ok_or_else(|| {
+                        let sectorss = sector_entries.get_all();
+                        let sector = sectorss.iter().find(|ss| ss.id == s).ok_or_else(|| {
                             error!("Couldn't find sector with id {} in db, maybe it was improperly removed?", s);
                             commands::Error::InternalError})?; sector.contents.to_sendable(sector.id)});
                 }

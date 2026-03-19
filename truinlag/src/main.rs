@@ -964,12 +964,20 @@ pub struct ZoneEntry {
     /// Travel duration to every other zone. Key is the target zone id and value is the time in
     /// minutes required to travel there.
     pub minutes_to: HashMap<u64, u64>,
+    /// The ids of the sectors that are 'close'. During ZKaff generation, if the team has no sector
+    /// but a zone, only challenges in close sectors will be generated.
+    #[serde(default)]
+    pub close_sectors: Vec<u64>,
 }
 
 impl ZoneEntry {
     /// Converts the engine-internal `ZoneEntry` type into a sendable truinlag `Zone` type
-    pub fn to_sendable(&self, id: u64) -> Zone {
-        Zone {
+    pub fn to_sendable(
+        &self,
+        id: u64,
+        sector_db: &DBMirror<SectorEntry>,
+    ) -> Result<Zone, commands::Error> {
+        Ok(Zone {
             zone: self.zone,
             num_conn_zones: self.num_conn_zones,
             num_connections: self.num_connections,
@@ -977,8 +985,18 @@ impl ZoneEntry {
             mongus: self.mongus,
             s_bahn_zone: self.s_bahn_zone,
             minutes_to: self.minutes_to.clone(),
+            close_sectors: {
+                let mut sectors = Vec::new();
+                for s in &self.close_sectors {
+                    sectors.push({
+                        let sector = sector_db.get(*s).map_err(|_| {
+                            error!("Couldn't find Sector with id {} in db while making Zone with id {} sendable, maybe it was improperly removed?", s, id);
+                            commands::Error::InternalError})?; sector.contents.to_sendable(sector.id)});
+                }
+                sectors
+            },
             id,
-        }
+        })
     }
 
     /// Calculates the zone's zonic kaffness based on a config.

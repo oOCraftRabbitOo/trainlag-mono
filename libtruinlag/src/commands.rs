@@ -181,6 +181,10 @@ pub enum EngineAction {
     RemoveNeighbourhood(u64, u64),
     GetSectors,
     RemoveSector(u64),
+    SetCloseSectors {
+        zone_id: u64,
+        sector_ids: Vec<u64>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
