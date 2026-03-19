@@ -352,6 +352,7 @@ fn cli() -> Command {
                 )
                 .arg(Arg::new("Name").required(true)),
         )
+        .subcommand(Command::new("get_sectors").about("Get all sectors"))
 }
 
 #[tokio::main]
@@ -379,18 +380,18 @@ async fn main() {
     };
 
     match name.as_str() {
+        "get_sectors" => run_command(EngineAction::GetSectors, address).await,
+
         "rename_player" => {
-            {
-                let player_id = sub_args.remove_one("Player ID").expect("required");
-                let name = sub_args.remove_one("Name").expect("required");
-                run_command(
-                    EngineAction::RenamePlayer {
-                        player_id,
-                        new_name: name,
-                    },
-                    address,
-                )
-            }
+            let player_id = sub_args.remove_one("Player ID").expect("required");
+            let name = sub_args.remove_one("Name").expect("required");
+            run_command(
+                EngineAction::RenamePlayer {
+                    player_id,
+                    new_name: name,
+                },
+                address,
+            )
             .await
         }
         "remove_team" => {
