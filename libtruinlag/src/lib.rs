@@ -255,6 +255,7 @@ pub struct RawChallenge {
     pub kaffskala: Option<u8>,
     pub grade: Option<u8>,
     pub zone: Vec<Zone>,
+    pub sectors: Vec<Sector>,
     pub bias_sat: f32,
     pub bias_sun: f32,
     pub walking_time: u8,
@@ -290,6 +291,7 @@ impl From<RawChallenge> for InputChallenge {
             kaffskala: challenge.kaffskala,
             grade: challenge.grade,
             zone: challenge.zone.iter().map(|z| z.id).collect(),
+            sectors: challenge.sectors.iter().map(|s| s.id).collect(),
             bias_sat: challenge.bias_sat,
             bias_sun: challenge.bias_sun,
             walking_time: challenge.walking_time,
@@ -326,6 +328,7 @@ pub struct InputChallenge {
     pub kaffskala: Option<u8>,
     pub grade: Option<u8>,
     pub zone: Vec<u64>,
+    pub sectors: Vec<u64>,
     pub bias_sat: f32,
     pub bias_sun: f32,
     pub walking_time: u8,
@@ -414,6 +417,13 @@ pub struct Zone {
     pub mongus: bool,
     pub s_bahn_zone: bool,
     pub minutes_to: std::collections::HashMap<u64, u64>,
+    pub id: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Sector {
+    pub name: char,
+    pub neighbours: Vec<u64>,
     pub id: u64,
 }
 

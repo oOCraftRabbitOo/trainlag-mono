@@ -88,6 +88,7 @@ fn response_to_to_app(response: ResponseAction, player_id: u64, session_id: u64)
             locations,
         }),
         SendGameConfig(_) => None,
+        SendSectors(_) => None,
     }
 }
 

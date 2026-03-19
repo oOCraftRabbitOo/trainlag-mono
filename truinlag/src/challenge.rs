@@ -1,4 +1,4 @@
-use crate::{DBEntry, SessionContext, ZoneEntry};
+use crate::{DBEntry, SectorEntry, SessionContext, ZoneEntry};
 use bonsaidb::core::{
     document::{CollectionDocument, Emit},
     schema::{
@@ -53,6 +53,8 @@ pub struct ChallengeEntry {
     pub grade: Option<u8>,
     /// The ids of the zones in which the challenge can be completed
     pub zone: Vec<u64>,
+    #[serde(default)]
+    pub sectors: Vec<u64>,
     pub bias_sat: f32,
     pub bias_sun: f32,
     pub walking_time: u8,
@@ -110,6 +112,7 @@ impl ChallengeEntry {
         id: u64,
         challenge_sets: &[DBEntry<ChallengeSetEntry>],
         zone_entries: &[DBEntry<ZoneEntry>],
+        sector_entries: &[DBEntry<SectorEntry>],
     ) -> Result<RawChallenge, commands::Error> {
         Ok(RawChallenge {
             kind: self.kind,
@@ -140,6 +143,16 @@ impl ChallengeEntry {
                             commands::Error::InternalError})?; zone.contents.to_sendable(zone.id)});
                 }
                 zones
+            },
+            sectors: {
+                let mut sectors = Vec::new();
+                for s in self.sectors.clone() {
+                    sectors.push({
+                        let sector = sector_entries.iter().find(|ss| ss.id == s).ok_or_else(|| {
+                            error!("Couldn't find sector with id {} in db, maybe it was improperly removed?", s);
+                            commands::Error::InternalError})?; sector.contents.to_sendable(sector.id)});
+                }
+                sectors
             },
             bias_sat: self.bias_sat,
             bias_sun: self.bias_sun,
@@ -217,7 +230,7 @@ impl ChallengeEntry {
             },
             None => match self.kind {
                 Kaff => match self.zone.first() {
-                    Some(id) => zone_db.get(*id),
+                    Some(id) => zone_db.get(*id).ok(),
                     None => {
                         error!("challenge with id {id} has invalid zone");
                         None
@@ -228,7 +241,7 @@ impl ChallengeEntry {
                         error!("challenge with id {id} has invalid zones");
                         None
                     }
-                    Some(zid) => zone_db.get(zid),
+                    Some(zid) => zone_db.get(zid).ok(),
                 },
                 ZKaff => Some(centre_zone.clone()),
                 Zoneable => {
@@ -466,6 +479,7 @@ impl From<InputChallenge> for ChallengeEntry {
             kaffskala: v.kaffskala,
             grade: v.grade,
             zone: v.zone,
+            sectors: v.sectors,
             bias_sat: v.bias_sat,
             bias_sun: v.bias_sun,
             walking_time: v.walking_time,

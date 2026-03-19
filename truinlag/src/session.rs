@@ -231,11 +231,7 @@ impl Session {
             // app to stop sending locations at those times. Yeah, that'll be a TODO
             return Ok(Success.into());
         }
-        let player = context
-            .engine_context
-            .player_db
-            .get_mut(player_id)
-            .ok_or(NotFound(format!("player with id {}", player_id)))?;
+        let player = context.engine_context.player_db.get_mut(player_id)?;
         if let Some(last_loc) = &player.contents.last_location
             && last_loc == &location.clone().into()
         {
@@ -279,8 +275,7 @@ impl Session {
         context
             .engine_context
             .player_db
-            .get_mut(player_id)
-            .ok_or(NotFound(format!("player with id {}", player_id)))?
+            .get_mut(player_id)?
             .contents
             .last_location = None;
         let mut old_team = None;
@@ -573,7 +568,7 @@ impl Session {
                 let set = config
                     .challenge_sets
                     .iter()
-                    .find(|&&s| context.engine_context.challenge_set_db.get(s).is_none());
+                    .find(|&&s| context.engine_context.challenge_set_db.get(s).is_err());
                 if let Some(bad_set) = set {
                     return Error(NotFound(format!("challenge set with id {}", bad_set))).into();
                 }
@@ -678,7 +673,7 @@ impl Session {
             }
             // reset last locations...
             for player_id in &team.players {
-                if let Some(player) = context.engine_context.player_db.get_mut(*player_id) {
+                if let Ok(player) = context.engine_context.player_db.get_mut(*player_id) {
                     player.contents.last_location = None;
                 }
             }

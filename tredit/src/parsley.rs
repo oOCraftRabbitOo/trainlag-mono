@@ -1,6 +1,7 @@
 use anyhow::Context;
 use libtruinlag::{
-    ChallengeSet, ChallengeStatus, ChallengeType, InputChallenge, RandomPlaceType, TextError, Zone,
+    ChallengeSet, ChallengeStatus, ChallengeType, InputChallenge, RandomPlaceType, Sector,
+    TextError, Zone,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -105,6 +106,7 @@ pub fn parse_record(
     record: &HashMap<String, String>,
     challenge_sets: &[ChallengeSet],
     truin_zones: &[Zone],
+    truin_sectors: &[Sector],
 ) -> anyhow::Result<Option<InputChallenge>> {
     let status: ChallengeStatus = record
         .get("status")
@@ -219,6 +221,23 @@ pub fn parse_record(
         }
     }
 
+    let mut sectors = Vec::new();
+    let sector_text = record
+        .get("sector")
+        .context("field \"sector\" not found")?
+        .trim();
+    if !sector_text.is_empty() {
+        for c in sector_text.chars() {
+            sectors.push(
+                truin_sectors
+                    .iter()
+                    .find(|s| s.name == c)
+                    .context(format!("couldn't find sector {} in truin sectors", c))?
+                    .id,
+            );
+        }
+    }
+
     let title_de_ch = parse_to_option(record, "title_de_ch")?;
     let description_de_ch = parse_to_option(record, "description_de_ch")?;
     let title_en_uk = parse_to_option(record, "title_en_uk")?;
@@ -259,6 +278,7 @@ pub fn parse_record(
         kaffskala: parse_to_option(record, "kaffskala")?,
         grade: parse_to_option(record, "grade")?,
         zone: zones,
+        sectors,
         bias_sat: parse_to_or(record, "bias_sat", 1.0)?,
         bias_sun: parse_to_or(record, "bias_sun", 1.0)?,
         walking_time: parse_to_or(record, "walking_time", 0)?,

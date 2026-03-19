@@ -1,6 +1,6 @@
 use crate::{
     ClonedDBEntry, DBMirror, EngineContext, EngineSchema, MutDBEntry, PastGame, PictureEntry,
-    PlayerEntry, SessionContext, TimerTracker, ZoneEntry,
+    PlayerEntry, SectorEntry, SessionContext, TimerTracker, ZoneEntry,
     challenge::{ChallengeEntry, ChallengeSetEntry},
     runtime::{
         InternEngineCommand, InternEngineResponse, InternEngineResponsePackage,
@@ -112,6 +112,7 @@ pub struct Engine {
     challenges: DBMirror<ChallengeEntry>,
     challenge_sets: DBMirror<ChallengeSetEntry>,
     zones: DBMirror<ZoneEntry>,
+    sectors: DBMirror<SectorEntry>,
     players: DBMirror<PlayerEntry>,
     past_games: DBMirror<PastGame>,
     pictures: DBMirror<PictureEntry>,
@@ -164,6 +165,8 @@ impl Engine {
         let challenge_sets = DBMirror::from_db(&db);
         info!("Engine: loading zones...");
         let zones = DBMirror::from_db(&db);
+        info!("Engine: loading sectors...");
+        let sectors = DBMirror::from_db(&db);
         info!("Engine: loading sessions...");
         let sessions: DBMirror<Session> = DBMirror::from_db(&db);
         info!("Engine: loading players...");
@@ -206,6 +209,7 @@ impl Engine {
             challenges,
             challenge_sets,
             zones,
+            sectors,
             sessions,
             players,
             past_games,
@@ -282,8 +286,8 @@ impl Engine {
                     timer_tracker: &mut self.timer_tracker,
                 };
                 match self.sessions.get_mut(session_id) {
-                    None => Success.into(), // = do nothing
-                    Some(session) => session
+                    Err(_) => Success.into(), // = do nothing
+                    Ok(session) => session
                         .contents
                         .team_left_grace_period(team_id, session_id, context),
                 }
@@ -299,14 +303,14 @@ impl Engine {
                 pfp,
             } => match pfp {
                 Ok(pfp) => match self.sessions.get_mut(session_id) {
-                    Some(session) => match session.contents.teams.get_mut(team_id) {
+                    Ok(session) => match session.contents.teams.get_mut(team_id) {
                         Some(team) => {
                             team.picture = Some(self.pictures.add(pfp));
                             Success
                         }
                         None => Error(NotFound(format!("team with id {}", team_id))),
                     },
-                    None => Error(NotFound(format!("session with id {}", session_id))),
+                    Err(err) => Error(err),
                 },
                 Err(err) => Error(err),
             }
@@ -314,11 +318,11 @@ impl Engine {
 
             InternEngineCommand::MadePlayerProfile { player_id, pfp } => match pfp {
                 Ok(pfp) => match self.players.get_mut(player_id) {
-                    Some(player) => {
+                    Ok(player) => {
                         player.contents.picture = Some(self.pictures.add(pfp));
                         Success
                     }
-                    None => Error(NotFound(format!("player with id {player_id}"))),
+                    Err(err) => Error(err),
                 },
                 Err(err) => Error(err),
             }
@@ -350,6 +354,10 @@ impl Engine {
                     let zone_changes = self.zones.extract_changes();
                     self.zones.clear_pending_deletions();
                     let zone_deletions = self.zones.extract_deletions();
+
+                    let sector_changes = self.sectors.extract_changes();
+                    self.sectors.clear_pending_deletions();
+                    let sector_deletions = self.sectors.extract_deletions();
 
                     let picture_changes = self.pictures.extract_changes();
                     self.pictures.clear_pending_deletions();
@@ -406,6 +414,15 @@ impl Engine {
                                     .unwrap();
                                 vec_delete_in_transaction::<ZoneEntry>(
                                     zone_deletions,
+                                    &mut transaction,
+                                    &db,
+                                )
+                                .await
+                                .unwrap();
+                                vec_overwrite_in_transaction(sector_changes, &mut transaction)
+                                    .unwrap();
+                                vec_delete_in_transaction::<SectorEntry>(
+                                    sector_deletions,
                                     &mut transaction,
                                     &db,
                                 )
@@ -483,26 +500,11 @@ impl Engine {
         response
     }
 
-    fn get_session(&mut self, session_id: u64) -> Result<MutDBEntry<'_, Session>, commands::Error> {
-        self.sessions
-            .get_mut(session_id)
-            .ok_or(commands::Error::NotFound(format!(
-                "session with id {}",
-                session_id
-            )))
-    }
-
     fn get_contexed_session(
         &mut self,
         session_id: u64,
     ) -> Result<(SessionContext<'_>, MutDBEntry<'_, Session>), commands::Error> {
-        let session = self
-            .sessions
-            .get_mut(session_id)
-            .ok_or(commands::Error::NotFound(format!(
-                "session with id {}",
-                session_id
-            )))?;
+        let session = self.sessions.get_mut(session_id)?;
         Ok((
             session.contents.context(
                 EngineContext {
@@ -557,18 +559,14 @@ impl Engine {
         from_zone: u64,
         to_zone: u64,
         minutes: u64,
-    ) -> InternEngineResponsePackage {
-        if self.zones.get(to_zone).is_none() {
-            Error(NotFound(format!("to zone with id {}", to_zone))).into()
-        } else {
-            match self.zones.get_mut(from_zone) {
-                None => Error(NotFound(format!("from zone with id {}", from_zone))).into(),
-                Some(entry) => {
-                    entry.contents.minutes_to.insert(to_zone, minutes);
-                    Success.into()
-                }
-            }
-        }
+    ) -> InternEngineResponseResult {
+        let _ = self.zones.get(to_zone)?;
+        self.zones
+            .get_mut(from_zone)?
+            .contents
+            .minutes_to
+            .insert(to_zone, minutes);
+        Ok(Success.into())
     }
 
     fn get_raw_challenges(&self) -> InternEngineResponsePackage {
@@ -578,7 +576,12 @@ impl Engine {
                 .iter()
                 .filter_map(|c| {
                     c.contents
-                        .to_sendable(c.id, &self.challenge_sets.get_all(), &self.zones.get_all())
+                        .to_sendable(
+                            c.id,
+                            &self.challenge_sets.get_all(),
+                            &self.zones.get_all(),
+                            &self.sectors.get_all(),
+                        )
                         .ok()
                 })
                 .collect(),
@@ -586,22 +589,18 @@ impl Engine {
         .into()
     }
 
-    fn set_raw_challenge(&mut self, challenge: InputChallenge) -> InternEngineResponsePackage {
+    fn set_raw_challenge(&mut self, challenge: InputChallenge) -> InternEngineResponseResult {
         match challenge.id {
-            Some(id) => match self.challenges.get_mut(id) {
-                None => Error(NotFound(format!("challenge with id {}", id))).into(),
-                Some(c) => {
-                    *c.contents = challenge.clone().into();
-                    Success.into()
-                }
-            },
-            None => Error(BadData(
+            Some(id) => {
+                *self.challenges.get_mut(id)?.contents = challenge.clone().into();
+                Ok(Success.into())
+            }
+            None => Err(BadData(
                 "the supplied challenge doesn't have an id. \
                     this can happen because the RawChallenge::new() method doesn't assign an id. \
                     challenges sent from truinlag have an id."
                     .into(),
-            ))
-            .into(),
+            )),
         }
     }
 
@@ -659,96 +658,86 @@ impl Engine {
         &mut self,
         player: u64,
         session: Option<u64>,
-    ) -> InternEngineResponsePackage {
-        match self.players.get_mut(player) {
-            None => Error(NotFound(format!("player with id {}", player))).into(),
-            Some(i_player) => {
-                let old_session = i_player.contents.session;
-                if old_session == session {
-                    Success.into()
-                } else {
-                    if let Some(tbr_session) = old_session {
-                        match self.sessions.get_mut(tbr_session) {
-                            None => {
-                                warn!(
-                                    "Engine: couldn't find session with id {} of player {}",
-                                    tbr_session, i_player.id
-                                )
-                            }
-                            Some(tbr_session) => {
-                                for team in &mut tbr_session.contents.teams {
-                                    team.players.retain(|p| p != &i_player.id);
-                                }
-                            }
+    ) -> InternEngineResponseResult {
+        let i_player = self.players.get_mut(player)?;
+        let old_session = i_player.contents.session;
+        if old_session == session {
+            Ok(Success.into())
+        } else {
+            if let Some(tbr_session) = old_session {
+                match self.sessions.get_mut(tbr_session) {
+                    Err(_) => {
+                        warn!(
+                            "Engine: couldn't find session with id {} of player {}",
+                            tbr_session, i_player.id
+                        )
+                    }
+                    Ok(tbr_session) => {
+                        for team in &mut tbr_session.contents.teams {
+                            team.players.retain(|p| p != &i_player.id);
                         }
                     }
-                    match session {
-                        None => {
-                            i_player.contents.session = None;
-                            i_player.contents.last_location = None;
-                            EngineResponse {
-                                response_action: Success,
-                                broadcast_action: Some(PlayerChangedSession {
-                                    player: i_player.contents.to_sendable(i_player.id),
-                                    from_session: old_session,
-                                    to_session: session,
-                                }),
-                            }
-                            .into()
-                        }
-                        Some(session) => {
-                            if self.sessions.get(session).is_some() {
-                                i_player.contents.session = Some(session);
-                                i_player.contents.last_location = None;
-                                EngineResponse {
-                                    response_action: Success,
-                                    broadcast_action: Some(PlayerChangedSession {
-                                        player: i_player.contents.to_sendable(i_player.id),
-                                        from_session: old_session,
-                                        to_session: Some(session),
-                                    }),
-                                }
-                                .into()
-                            } else {
-                                Error(NotFound(format!("session with id {}", session))).into()
-                            }
-                        }
+                }
+            }
+            match session {
+                None => {
+                    i_player.contents.session = None;
+                    i_player.contents.last_location = None;
+                    Ok(EngineResponse {
+                        response_action: Success,
+                        broadcast_action: Some(PlayerChangedSession {
+                            player: i_player.contents.to_sendable(i_player.id),
+                            from_session: old_session,
+                            to_session: session,
+                        }),
                     }
+                    .into())
+                }
+                Some(session) => {
+                    let _ = self.sessions.get(session)?;
+                    i_player.contents.session = Some(session);
+                    i_player.contents.last_location = None;
+                    Ok(EngineResponse {
+                        response_action: Success,
+                        broadcast_action: Some(PlayerChangedSession {
+                            player: i_player.contents.to_sendable(i_player.id),
+                            from_session: old_session,
+                            to_session: Some(session),
+                        }),
+                    }
+                    .into())
                 }
             }
         }
     }
 
-    fn set_player_name(&mut self, player: u64, name: String) -> InternEngineResponsePackage {
-        match self.players.get_mut(player) {
-            None => Error(NotFound(format!("player with id {}", player))).into(),
-            Some(player) => {
-                player.contents.name = name;
-                Success.into()
-            }
-        }
+    fn set_player_name(&mut self, player: u64, name: String) -> InternEngineResponseResult {
+        self.players.get_mut(player)?.contents.name = name;
+        Ok(Success.into())
     }
 
     fn set_player_passphrase(
         &mut self,
         player: u64,
         passphrase: String,
-    ) -> InternEngineResponsePackage {
-        match self.players.get_mut(player) {
-            None => Error(NotFound(format!("player with id {}", player))).into(),
-            Some(player) => {
-                player.contents.passphrase = passphrase;
-                Success.into()
-            }
-        }
+    ) -> InternEngineResponseResult {
+        self.players.get_mut(player)?.contents.passphrase = passphrase;
+        Ok(Success.into())
     }
 
-    fn remove_player(&mut self, _player: u64) -> InternEngineResponsePackage {
+    fn remove_player(&mut self, player_id: u64) -> InternEngineResponseResult {
         // Note that this doesn't actually remove the player from the db, it just
         // removes all references to them from all sessions and removes their
         // passphrase.
-        // NEVERMIND, this currently does nothing
-        Error(NotImplemented).into()
+        let player = self.players.get_mut(player_id)?;
+        player.contents.passphrase = String::from("");
+        player.contents.name = String::from("removed");
+        player.contents.picture = None;
+        player.contents.discord_id = None;
+        player.contents.phone_number = None;
+        player.contents.session = None;
+        player.contents.last_location = None;
+        Ok(Success.into())
     }
 
     fn ping(&self, payload: Option<String>) -> InternEngineResponsePackage {
@@ -829,9 +818,10 @@ impl Engine {
         &mut self,
         player_id: u64,
         picture: RawPicture,
-    ) -> InternEngineResponsePackage {
-        match self.players.get_mut(player_id) {
-            Some(_player) => InternEngineResponse::DelayedLoopback(tokio::spawn(async move {
+    ) -> InternEngineResponseResult {
+        let _ = self.players.get(player_id)?;
+        Ok(
+            InternEngineResponse::DelayedLoopback(tokio::spawn(async move {
                 let pfp = tokio::task::block_in_place(|| PictureEntry::new_profile(picture.into()))
                     .map_err(|err| {
                         error!("Engine: couldn't convert picture: {}", err);
@@ -840,15 +830,14 @@ impl Engine {
                 InternEngineCommand::MadePlayerProfile { player_id, pfp }
             }))
             .into(),
-            None => Error(NotFound(format!("player with id {player_id}"))).into(),
-        }
+        )
     }
 
     fn get_thumbnails(&self, ids: Vec<u64>) -> InternEngineResponsePackage {
         Pictures(
             ids.iter()
                 .filter_map(|id| {
-                    self.pictures.get(*id).and_then(|p| match p.contents {
+                    self.pictures.get(*id).ok().and_then(|p| match p.contents {
                         PictureEntry::Profile { thumb, full: _ } => Some(Picture {
                             data: thumb.clone(),
                             is_thumbnail: true,
@@ -866,7 +855,7 @@ impl Engine {
         Pictures(
             ids.iter()
                 .filter_map(|id| {
-                    self.pictures.get(*id).map(|p| match p.contents {
+                    self.pictures.get(*id).ok().map(|p| match p.contents {
                         PictureEntry::ChallengePicture(pic) => Picture {
                             data: pic.clone(),
                             is_thumbnail: false,
@@ -884,43 +873,99 @@ impl Engine {
         .into()
     }
 
-    fn rename_player(&mut self, player_id: u64, new_name: String) -> InternEngineResponsePackage {
-        match self.players.get_mut(player_id) {
-            None => Error(NotFound(format!("player with id {}", player_id))).into(),
-            Some(player) => {
-                player.contents.name = new_name;
-                Success.into()
-            }
-        }
+    fn rename_player(&mut self, player_id: u64, new_name: String) -> InternEngineResponseResult {
+        self.players.get_mut(player_id)?.contents.name = new_name;
+        Ok(Success.into())
     }
 
     fn set_player_phone_number(
         &mut self,
         player_id: u64,
         phone_number: Option<String>,
-    ) -> InternEngineResponsePackage {
-        match self.players.get_mut(player_id) {
-            None => Error(NotFound(format!("player with id {}", player_id))).into(),
-            Some(player) => {
-                player.contents.phone_number = phone_number;
-                Success.into()
+    ) -> InternEngineResponseResult {
+        self.players.get_mut(player_id)?.contents.phone_number = phone_number;
+        Ok(Success.into())
+    }
+
+    fn add_sector(&mut self, name: char) -> InternEngineResponseResult {
+        if self.sectors.any(|s| s.name == name) {
+            Err(AlreadyExists)
+        } else {
+            self.sectors.add(SectorEntry {
+                name,
+                neighbours: Vec::new(),
+            });
+            Ok(Success.into())
+        }
+    }
+
+    fn add_neighbourhood(&mut self, one: u64, other: u64) -> InternEngineResponseResult {
+        if self.sectors.get(one)?.contents.neighbours.contains(&other)
+            || self.sectors.get(other)?.contents.neighbours.contains(&one)
+        {
+            return Err(AlreadyExists);
+        }
+        self.sectors.get_mut(other)?.contents.neighbours.push(one);
+        self.sectors.get_mut(one)?.contents.neighbours.push(other);
+        Ok(Success.into())
+    }
+
+    fn remove_neighbourhood(&mut self, one: u64, other: u64) -> InternEngineResponseResult {
+        let _ = self.sectors.get_mut(one)?; // to check whether one exists
+        self.sectors
+            .get_mut(other)?
+            .contents
+            .neighbours
+            .retain(|n| n != &one);
+        self.sectors
+            .get_mut(one)?
+            .contents
+            .neighbours
+            .retain(|n| n != &other);
+        Ok(Success.into())
+    }
+
+    fn get_sectors(&self) -> InternEngineResponseResult {
+        Ok(SendSectors(
+            self.sectors
+                .get_all()
+                .iter()
+                .map(|s| s.contents.to_sendable(s.id))
+                .collect(),
+        )
+        .into())
+    }
+
+    fn remove_sector(&mut self, sector_id: u64) -> InternEngineResponseResult {
+        self.sectors.delete(sector_id)?;
+        // this is really fucking inefficient but I don't care because who will ever remove sectors
+        loop {
+            match self.challenges.find_mut(|c| c.sectors.contains(&sector_id)) {
+                None => break,
+                Some(challenge) => challenge.contents.sectors.retain(|s| s != &sector_id),
             }
         }
+        Ok(Success.into())
     }
 
     fn handle_action(&mut self, action: EngineAction) -> InternEngineResponseResult {
         match action {
+            RemoveSector(sector_id) => self.remove_sector(sector_id),
+            RemoveNeighbourhood(one, other) => self.remove_neighbourhood(one, other),
+            GetSectors => self.get_sectors(),
+            AddNeighbourhood(one, other) => self.add_neighbourhood(one, other),
+            AddSector(name) => self.add_sector(name),
             SetPlayerPhoneNumber(player_id, phone_number) => {
-                Ok(self.set_player_phone_number(player_id, phone_number))
+                self.set_player_phone_number(player_id, phone_number)
             }
             RenamePlayer {
                 player_id,
                 new_name,
-            } => Ok(self.rename_player(player_id, new_name)),
+            } => self.rename_player(player_id, new_name),
             GetPictures(ids) => Ok(self.get_pictures(ids)),
             GetThumbnails(ids) => Ok(self.get_thumbnails(ids)),
             UploadPlayerPicture { player_id, picture } => {
-                Ok(self.upload_player_picture(player_id, picture))
+                self.upload_player_picture(player_id, picture)
             }
             GetAllZones => Ok(self.get_all_zones()),
             AddZone {
@@ -942,9 +987,9 @@ impl Engine {
                 from_zone,
                 to_zone,
                 minutes,
-            } => Ok(self.add_minutes_to(from_zone, to_zone, minutes)),
+            } => self.add_minutes_to(from_zone, to_zone, minutes),
             GetRawChallenges => Ok(self.get_raw_challenges()),
-            SetRawChallenge(challenge) => Ok(self.set_raw_challenge(challenge)),
+            SetRawChallenge(challenge) => self.set_raw_challenge(challenge),
             AddRawChallenge(challenge) => Ok(self.add_raw_challenge(challenge)),
             DeleteAllChallenges => Ok(self.delete_all_challenges()),
             GetPlayerByPassphrase(passphrase) => Ok(self.get_player_by_passphrase(passphrase)),
@@ -955,12 +1000,12 @@ impl Engine {
                 passphrase,
                 session,
             } => Ok(self.add_player(name, discord_id, passphrase, session)),
-            SetPlayerSession { player, session } => Ok(self.set_player_session(player, session)),
-            SetPlayerName { player, name } => Ok(self.set_player_name(player, name)),
+            SetPlayerSession { player, session } => self.set_player_session(player, session),
+            SetPlayerName { player, name } => self.set_player_name(player, name),
             SetPlayerPassphrase { player, passphrase } => {
-                Ok(self.set_player_passphrase(player, passphrase))
+                self.set_player_passphrase(player, passphrase)
             }
-            RemovePlayer { player } => Ok(self.remove_player(player)),
+            RemovePlayer { player } => self.remove_player(player),
             Ping(payload) => Ok(self.ping(payload)),
             GetState(session_id) => self.get_state(session_id),
             AddChallengeSet(name) => Ok(self.add_challenge_set(name)),
@@ -1009,7 +1054,7 @@ impl Engine {
                 discord_channel,
                 colour,
             } => {
-                let session = self.get_session(session_id)?;
+                let session = self.sessions.get_mut(session_id)?;
                 Ok(session.contents.add_team(name, discord_channel, colour))
             }
             AssignPlayerToTeam {
@@ -1048,7 +1093,7 @@ impl Engine {
                 team,
                 challenge,
             } => {
-                let session = self.get_session(session_id)?;
+                let session = self.sessions.get_mut(session_id)?;
                 Ok(session.contents.add_challenge_to_team(team, challenge))
             }
             RenameTeam {
@@ -1056,11 +1101,11 @@ impl Engine {
                 team,
                 new_name,
             } => {
-                let session = self.get_session(session_id)?;
+                let session = self.sessions.get_mut(session_id)?;
                 Ok(session.contents.rename_team(team, new_name))
             }
             GetEvents(session_id) => {
-                let session = self.get_session(session_id)?;
+                let session = self.sessions.get(session_id)?;
                 Ok(session.contents.get_events())
             }
             UploadTeamPicture {
@@ -1093,24 +1138,24 @@ impl Engine {
                 team_id,
                 of_past_seconds,
             } => {
-                let session = self.get_session(session_id)?;
+                let session = self.sessions.get(session_id)?;
                 Ok(session
                     .contents
                     .send_past_locations(team_id, of_past_seconds))
             }
             GetGameConfig(session_id) => {
-                let session = self.get_session(session_id)?;
+                let session = self.sessions.get(session_id)?;
                 Ok(session.contents.send_game_config())
             }
             SetGameConfig { session_id, config } => {
-                let session = self.get_session(session_id)?;
+                let session = self.sessions.get_mut(session_id)?;
                 Ok(session.contents.set_game_config(config))
             }
             RemoveTeam {
                 session_id,
                 team_id,
             } => {
-                let session = self.get_session(session_id)?;
+                let session = self.sessions.get_mut(session_id)?;
                 Ok(session.contents.remove_team(team_id))
             }
         }

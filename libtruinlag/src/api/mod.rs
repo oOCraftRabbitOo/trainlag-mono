@@ -255,6 +255,14 @@ impl SendConnection {
         }
     }
 
+    pub async fn get_sectors(&mut self) -> Result<Vec<Sector>> {
+        match self.send(EngineAction::GetSectors).await? {
+            ResponseAction::SendSectors(sectors) => Ok(sectors),
+            ResponseAction::Error(err) => Err(Error::Truinlag(err)),
+            other => Err(Error::InvalidSignal(format!("{:?}", other))),
+        }
+    }
+
     pub async fn delete_all_challenges(&mut self) -> Result<()> {
         match self.send(EngineAction::DeleteAllChallenges).await {
             Ok(response) => match response {

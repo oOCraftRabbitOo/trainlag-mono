@@ -6,6 +6,7 @@ use std::collections::HashMap;
 const CHALLENGE_SHEET: &str = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRcImsj8yCZNaKSx4wYk6GZnBkZ_Eody246mqM4UjsvYIW3wqd37kIhhIlrWJ3tiwSLbN9RWzMVs-V1/pub?gid=1012921349&single=true&output=csv";
 const ZONENKAFF_SHEET: &str = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSEz-OcFSz13kGB2Z9iRzLmBkor8R2o7C-tzOSm91cQKt4foAG6iGynlT8PhO3I5Pt5iB_Mj7Bu0BeO/pub?gid=1336941165&single=true&output=csv";
 const DISTANCES_SHEET: &str = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSEz-OcFSz13kGB2Z9iRzLmBkor8R2o7C-tzOSm91cQKt4foAG6iGynlT8PhO3I5Pt5iB_Mj7Bu0BeO/pub?gid=381450010&single=true&output=csv";
+const SECTOR_SHEET: &str = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRcImsj8yCZNaKSx4wYk6GZnBkZ_Eody246mqM4UjsvYIW3wqd37kIhhIlrWJ3tiwSLbN9RWzMVs-V1/pub?gid=2097621621&single=true&output=csv";
 
 pub fn get_input(query: &str) -> String {
     use std::io::{Write, stdin, stdout};
@@ -114,6 +115,7 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
     printnnl("re-fetching zones...");
     let truin_zones = sender.get_zones().await.unwrap();
     println!("  done!");
+
     printnnl("fetching sheet zone distance data...");
     let connections = get_data(DISTANCES_SHEET).await;
     println!("  done!");
@@ -152,6 +154,64 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
     }
     println!("  done!");
 
+    printnnl("fetching existing sectors...");
+    let truin_sectors = sender.get_sectors().await.unwrap();
+    println!("  done!");
+    printnnl("fetching sheet sector data...");
+    let sheet_sectors: Vec<(char, Vec<char>)> = get_data(SECTOR_SHEET)
+        .await
+        .iter()
+        .map(|s| {
+            (
+                s.get("sector").unwrap().chars().next().unwrap(),
+                s.get("neighbours").unwrap().chars().collect(),
+            )
+        })
+        .collect();
+    println!("  done!");
+    printnnl("adding missing sectors");
+    for (sheet_sector, _) in &sheet_sectors {
+        printnnl(".");
+        if !truin_sectors.iter().any(|s| &s.name == sheet_sector) {
+            sender
+                .send(EngineAction::AddSector(*sheet_sector))
+                .await
+                .unwrap();
+        }
+    }
+    println!("  done!");
+
+    printnnl("re-fetching sectors...");
+    let truin_sectors = sender.get_sectors().await.unwrap();
+    println!("  done!");
+
+    printnnl("adding missing sector neighbourhoods...");
+    for truin_sector in &truin_sectors {
+        if let Some((_sheet_sector, sheet_neighbours)) =
+            sheet_sectors.iter().find(|s| s.0 == truin_sector.name)
+        {
+            for sheet_neighbour in sheet_neighbours {
+                let sheet_neighbour_id = truin_sectors
+                    .iter()
+                    .find(|s| &s.name == sheet_neighbour)
+                    .unwrap();
+                if !(sheet_neighbour_id.id > truin_sector.id
+                    || truin_sector.neighbours.contains(&sheet_neighbour_id.id))
+                {
+                    printnnl(".");
+                    sender
+                        .send(EngineAction::AddNeighbourhood(
+                            truin_sector.id,
+                            sheet_neighbour_id.id,
+                        ))
+                        .await
+                        .unwrap();
+                }
+            }
+        }
+    }
+    println!("  done!");
+
     printnnl("fetching UC4 challenge data...");
     let records = get_data(CHALLENGE_SHEET).await;
     println!("  done!");
@@ -159,7 +219,7 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
     let mut challenges = Vec::new();
     println!("parsing challenges...");
     for (i, record) in records.iter().enumerate() {
-        let challenge = parse_record(record, &challenge_sets, &truin_zones);
+        let challenge = parse_record(record, &challenge_sets, &truin_zones, &truin_sectors);
         match challenge {
             Ok(c) => {
                 if let Some(c) = c {

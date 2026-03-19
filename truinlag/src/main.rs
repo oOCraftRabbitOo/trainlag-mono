@@ -17,7 +17,7 @@ use partially::Partial;
 use runtime::{InternEngineCommand, RuntimeRequest, manager};
 use serde::{Deserialize, Serialize};
 use session::Session;
-use std::{collections::HashMap, ops::Range};
+use std::{any::type_name, collections::HashMap, ops::Range};
 use team::{PeriodContext, TeamEntry};
 
 /// this just starts the manager from the runtime :)
@@ -280,30 +280,40 @@ where
     }
 
     /// Gets the item with the requested id from the db. Returns `None` if the item doesn't exist.
-    fn get(&self, id: u64) -> Option<DBEntry<'_, T>> {
+    fn get(&self, id: u64) -> Result<DBEntry<'_, T>, commands::Error> {
         match self.entries.get(id as usize) {
             // could be optimised with binary search?
             Some(Some((contents, status))) => match status {
-                DBStatus::Unchanged | DBStatus::Edited => Some(DBEntry { id, contents }),
-                DBStatus::ToBeDeleted | DBStatus::BeingDeleted => None,
+                DBStatus::Unchanged | DBStatus::Edited => Ok(DBEntry { id, contents }),
+                DBStatus::ToBeDeleted | DBStatus::BeingDeleted => Err(commands::Error::NotFound(
+                    format!("{} with id {}", std::any::type_name::<T>(), id),
+                )),
             },
-            Some(None) => None,
-            None => None,
+            Some(None) | None => Err(commands::Error::NotFound(format!(
+                "{} with id {}",
+                std::any::type_name::<T>(),
+                id
+            ))),
         }
     }
 
     /// Mutably gets the item with the requested id from the db. Returns `None` if the item doesn't exist.
-    fn get_mut(&mut self, id: u64) -> Option<MutDBEntry<'_, T>> {
+    fn get_mut(&mut self, id: u64) -> Result<MutDBEntry<'_, T>, commands::Error> {
         match self.entries.get_mut(id as usize) {
             Some(Some((contents, status))) => match status {
                 DBStatus::Unchanged | DBStatus::Edited => {
                     *status = DBStatus::Edited;
-                    Some(MutDBEntry { id, contents })
+                    Ok(MutDBEntry { id, contents })
                 }
-                DBStatus::ToBeDeleted | DBStatus::BeingDeleted => None,
+                DBStatus::ToBeDeleted | DBStatus::BeingDeleted => Err(commands::Error::NotFound(
+                    format!("{} with id {}", std::any::type_name::<T>(), id),
+                )),
             },
-            Some(None) => None,
-            None => None,
+            Some(None) | None => Err(commands::Error::NotFound(format!(
+                "{} with id {}",
+                std::any::type_name::<T>(),
+                id
+            ))),
         }
     }
 
@@ -390,12 +400,17 @@ where
     }
 
     /// Deletes an entry from the collection
-    fn delete(&mut self, id: u64) -> Result<(), ()> {
+    fn delete(&mut self, id: u64) -> Result<(), commands::Error> {
         match self.entries.get_mut(id as usize) {
-            None => Err(()),
-            Some(None) => Err(()),
+            None | Some(None) => Err(commands::Error::NotFound(format!(
+                "{} with id {}",
+                type_name::<T>(),
+                id
+            ))),
             Some(Some((_, status))) => match status {
-                DBStatus::ToBeDeleted | DBStatus::BeingDeleted => Err(()),
+                DBStatus::ToBeDeleted | DBStatus::BeingDeleted => Err(commands::Error::NotFound(
+                    format!("{} with id {}", type_name::<T>(), id),
+                )),
                 DBStatus::Edited | DBStatus::Unchanged => {
                     *status = DBStatus::ToBeDeleted;
                     Ok(())
@@ -859,7 +874,7 @@ impl From<PartialGameConfig> for PartialConfig {
 
 /// Some bonsaidb thing to make the db work
 #[derive(Schema)]
-#[schema(name="engine", collections=[Session, PlayerEntry, ChallengeEntry, ZoneEntry, PastGame, PictureEntry, ChallengeSetEntry])]
+#[schema(name="engine", collections=[Session, PlayerEntry, ChallengeEntry, ZoneEntry, SectorEntry, PastGame, PictureEntry, ChallengeSetEntry])]
 struct EngineSchema {}
 
 #[derive(Debug, Collection, Serialize, Deserialize, Clone)]
@@ -999,6 +1014,23 @@ impl ZoneEntry {
             .iter()
             .filter_map(|(to, t)| if range.contains(t) { Some(*to) } else { None })
             .collect()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Collection)]
+#[collection(name = "sector")]
+pub struct SectorEntry {
+    pub name: char,
+    pub neighbours: Vec<u64>,
+}
+
+impl SectorEntry {
+    fn to_sendable(&self, id: u64) -> Sector {
+        Sector {
+            name: self.name,
+            neighbours: self.neighbours.clone(),
+            id,
+        }
     }
 }
 

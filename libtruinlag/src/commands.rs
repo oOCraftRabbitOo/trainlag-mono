@@ -176,6 +176,11 @@ pub enum EngineAction {
         team_id: usize,
     },
     SetPlayerPhoneNumber(u64, Option<String>),
+    AddSector(char),
+    AddNeighbourhood(u64, u64),
+    RemoveNeighbourhood(u64, u64),
+    GetSectors,
+    RemoveSector(u64),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -206,6 +211,7 @@ pub enum ResponseAction {
         locations: Vec<MinimalLocation>,
     },
     SendGameConfig(GameConfig),
+    SendSectors(Vec<Sector>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
