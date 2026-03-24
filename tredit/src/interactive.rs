@@ -214,10 +214,16 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
 
     printnnl("resetting close sectors of zones...");
     for truin_zone in &truin_zones {
-        let sheet_zone = sheet_zones
+        let sheet_zone = match sheet_zones
             .iter()
             .find(|z| z.get("Zone").unwrap().parse::<u64>().unwrap() == truin_zone.zone)
-            .unwrap();
+        {
+            Some(z) => z,
+            None => {
+                printnnl("!");
+                continue;
+            }
+        };
         let mut zone_sector_ids: Vec<u64> = sheet_zone
             .get("sectors")
             .unwrap()
