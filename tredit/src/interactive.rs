@@ -71,21 +71,19 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
     let truin_zones = sender.get_zones().await.unwrap();
     println!("  done!");
     printnnl("fetching sheet zonic kaff data...");
-    let sheet_zones: Vec<HashMap<String, String>> = get_data(ZONENKAFF_SHEET)
-        .await
-        .iter()
-        .filter(|z| {
-            let zz = z.get("Zone").unwrap().parse().unwrap();
-            !truin_zones.iter().any(|tz| tz.zone == zz)
-        })
-        .cloned()
-        .collect();
+    let sheet_zones: Vec<HashMap<String, String>> = get_data(ZONENKAFF_SHEET).await.to_vec();
     println!("  done!");
     let s_bahn_zones = [
         110, 112, 117, 120, 121, 132, 133, 134, 141, 142, 151, 154, 155, 156, 180, 181,
     ];
     printnnl("adding missing zones");
     for sheet_zone in &sheet_zones {
+        if truin_zones
+            .iter()
+            .any(|tz| tz.zone == sheet_zone.get("Zone").unwrap().parse().unwrap())
+        {
+            continue;
+        }
         printnnl(".");
         sender
             .send(EngineAction::AddZone {
@@ -246,6 +244,7 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
                 .unwrap();
         }
     }
+    println!("  done!");
 
     printnnl("fetching UC4 challenge data...");
     let records = get_data(CHALLENGE_SHEET).await;
