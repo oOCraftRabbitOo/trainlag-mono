@@ -257,6 +257,7 @@ impl Engine {
         // The engine can receive many kinds of commands, some from the runtime (and itself, with a
         // delay for example) and some from actual clients. All cases are categorised within the
         // `InternEngineCommand` enum.
+        debug!("received command: {:?}", command);
         let start_time = std::time::Instant::now();
         let response = match command {
             // These are cases from actual external clients. For readability, they are passed to
