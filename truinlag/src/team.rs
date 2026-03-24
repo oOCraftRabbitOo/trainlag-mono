@@ -29,6 +29,8 @@ pub struct TeamEntry {
     pub bounty: u64,
     #[serde(default)]
     pub current_zone_id: u64,
+    #[serde(default)]
+    pub current_sector_id: Option<u64>, // should only be Some after completing a challenge in zürich
     pub current_location: Option<DetailedLocation>,
     pub locations: Vec<MinimalLocation>,
     #[serde(default)]
@@ -126,6 +128,7 @@ impl TeamEntry {
             location_sending_player: None,
             periods: Vec::new(),
             current_zone_id: config.start_zone,
+            current_sector_id: None,
             grace_period_end: None,
         }
     }
