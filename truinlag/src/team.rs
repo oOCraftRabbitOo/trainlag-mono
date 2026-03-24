@@ -178,10 +178,10 @@ impl TeamEntry {
                 })
                 .collect(),
             location: self.current_location.clone(),
-            in_grace_period: match &self.grace_period_end {
-                None => false,
-                Some(timer) => chrono::Local::now() <= timer.end_time,
-            },
+            grace_period_end: self
+                .grace_period_end
+                .clone()
+                .map(|hook| hook.end_time.timestamp()),
             period_id: self.period_id(),
         }
     }

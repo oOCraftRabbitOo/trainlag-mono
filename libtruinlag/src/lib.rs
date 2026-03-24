@@ -441,7 +441,7 @@ pub struct Team {
     pub challenges: Vec<Challenge>,
     pub completed_challenges: Vec<CompletedChallenge>,
     pub location: Option<DetailedLocation>,
-    pub in_grace_period: bool,
+    pub grace_period_end: Option<Timestamp>,
     pub period_id: usize,
 }
 
