@@ -54,7 +54,7 @@ pub struct ChallengeEntry {
     /// The ids of the zones in which the challenge can be completed
     pub zone: Vec<u64>,
     #[serde(default)]
-    pub sectors: Vec<u64>,
+    pub sector: Vec<u64>,
     pub bias_sat: f32,
     pub bias_sun: f32,
     pub walking_time: u8,
@@ -146,7 +146,7 @@ impl ChallengeEntry {
             },
             sectors: {
                 let mut sectors = Vec::new();
-                for s in self.sectors.clone() {
+                for s in self.sector.clone() {
                     sectors.push({
                         let sectorss = sector_entries.get_all();
                         let sector = sectorss.iter().find(|ss| ss.id == s).ok_or_else(|| {
@@ -480,7 +480,7 @@ impl From<InputChallenge> for ChallengeEntry {
             kaffskala: v.kaffskala,
             grade: v.grade,
             zone: v.zone,
-            sectors: v.sectors,
+            sector: v.sectors,
             bias_sat: v.bias_sat,
             bias_sun: v.bias_sun,
             walking_time: v.walking_time,

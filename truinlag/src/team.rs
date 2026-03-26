@@ -30,7 +30,7 @@ pub struct TeamEntry {
     #[serde(default)]
     pub current_zone_id: u64,
     #[serde(default)]
-    pub current_sector_id: Option<u64>, // should only be Some after completing a challenge in zürich
+    pub current_sector_id: Option<u64>, // should only be Some after completing a challenge in Zürich
     pub current_location: Option<DetailedLocation>,
     pub locations: Vec<MinimalLocation>,
     #[serde(default)]
@@ -468,6 +468,39 @@ impl TeamEntry {
         let dist_range = config.normal_period_near_distance_range.clone();
         let near_filter: Filter = Rc::new(move |c| -> bool {
             dist_range.contains(&c.contents.distance(&team_zone_2.as_borrowed()))
+        });
+
+        let sector_entries = context.engine_context.sector_db;
+        let team_sector = self.current_sector_id.map(|id| {
+            sector_entries
+                .get(id)
+                .expect("team is in a sector that is not in db")
+        });
+
+        //let team_zone_2 = team_zone.clone_contents();
+        // The sector is not Some or Zone is not 110, we use Zone adjacency (i.e. the "sectors" field from zones sheet)
+        // If it is Some, we use Sector adjacency (i.e. the "neighbors" field from sectors sheet)
+        // both of these are Strings of capital letters representing sectors (e.g. "XOD")
+
+        let current_zone = team_zone.contents.zone;
+        let adjacent_sectors: Vec<u64> = if current_zone == 110 {
+            if let Some(sector) = &team_sector {
+                sector.contents.neighbours.clone()
+            } else {
+                team_zone.contents.sectors.clone()
+            }
+        } else {
+            team_zone.contents.sectors.clone()
+        };
+
+        let sector_filter: Filter = Rc::new(move |c| -> bool {
+            if let Some(target_sector) = Some(&c.contents.sector) {
+                target_sector
+                    .iter()
+                    .any(|sector| adjacent_sectors.contains(sector))
+            } else {
+                false
+            }
         });
 
         let centre_zone = match zone_entries.find(|z| z.zone == config.centre_zone) {
