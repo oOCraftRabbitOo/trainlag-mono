@@ -64,11 +64,13 @@ pub enum PeriodContext {
         bounty: u64,         // the bounty handed over to said team
         #[serde(default)]
         not_completed: Vec<Challenge>, // the challenges the caught team couldn't finish
+        #[serde(default)]
         catcher_period_id: usize, // allows finding the opposing catcher period
     },
     Catcher {
-        caught_team: usize,      // the id of the team that was caught
-        bounty: u64,             // the bounty collected from said team
+        caught_team: usize, // the id of the team that was caught
+        bounty: u64,        // the bounty collected from said team
+        #[serde(default)]
         caught_period_id: usize, // allows finding the opposing caught period
     },
     CompletedChallenge {
