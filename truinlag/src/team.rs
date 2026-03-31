@@ -64,10 +64,12 @@ pub enum PeriodContext {
         bounty: u64,         // the bounty handed over to said team
         #[serde(default)]
         not_completed: Vec<Challenge>, // the challenges the caught team couldn't finish
+        catcher_period_id: usize, // allows finding the opposing catcher period
     },
     Catcher {
-        caught_team: usize, // the id of the team that was caught
-        bounty: u64,        // the bounty collected from said team
+        caught_team: usize,      // the id of the team that was caught
+        bounty: u64,             // the bounty collected from said team
+        caught_period_id: usize, // allows finding the opposing caught period
     },
     CompletedChallenge {
         title: String,       // the title of the completed challenge
@@ -284,6 +286,7 @@ impl TeamEntry {
                     catcher_team: _,
                     bounty: _,
                     not_completed,
+                    catcher_period_id: _,
                 } => {
                     ret.append(&mut not_completed.clone());
                 }
@@ -840,15 +843,16 @@ impl TeamEntry {
     }
 
     /// Sets all the values inside that team that need to be set when it gets caught
-    pub fn be_caught(&mut self, catcher_id: usize) {
-        self.grace_period_end = None;
-        self.challenges.clear();
-        self.role = TeamRole::Catcher;
+    pub fn be_caught(&mut self, catcher_id: usize, catcher_period_id: usize) {
         self.new_period(PeriodContext::Caught {
             catcher_team: catcher_id,
             bounty: self.bounty,
             not_completed: self.challenges.iter().map(|c| c.to_sendable()).collect(),
+            catcher_period_id,
         });
+        self.grace_period_end = None;
+        self.challenges.clear();
+        self.role = TeamRole::Catcher;
         self.bounty = 0;
     }
 
@@ -861,6 +865,7 @@ impl TeamEntry {
         catcher_id: usize,
         caught_zone: u64,
         context: &mut SessionContext,
+        caught_period_id: usize,
     ) -> RuntimeRequest {
         self.points += bounty;
         self.current_zone_id = caught_zone;
@@ -878,6 +883,7 @@ impl TeamEntry {
         self.new_period(PeriodContext::Catcher {
             caught_team: caught_id,
             bounty,
+            caught_period_id,
         });
         request
     }

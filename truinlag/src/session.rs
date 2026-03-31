@@ -325,6 +325,8 @@ impl Session {
     ) -> InternEngineResponsePackage {
         match self.game {
             Some(_) => {
+                let catcher_period_id;
+                let caught_period_id;
                 if caught == catcher {
                     return Error(BadData("a team cannot catch itself".into())).into();
                 }
@@ -343,37 +345,41 @@ impl Session {
                         }
                         match catcher_team.role {
                             TeamRole::Catcher => match self.teams.get(caught) {
-                                Some(caught_team) => match caught_team.role {
-                                    TeamRole::Runner => {
-                                        if caught_team.location().is_some()
-                                            && catcher_team.location().is_some()
-                                        {
-                                            let caught_location =
-                                                caught_team.location_as_point().unwrap();
-                                            let catcher_location =
-                                                catcher_team.location_as_point().unwrap();
-                                            if geo::Geodesic
-                                                .distance(caught_location, catcher_location)
-                                                > 300.0
+                                Some(caught_team) => {
+                                    caught_period_id = caught_team.period_id();
+                                    catcher_period_id = catcher_team.period_id();
+                                    match caught_team.role {
+                                        TeamRole::Runner => {
+                                            if caught_team.location().is_some()
+                                                && catcher_team.location().is_some()
                                             {
-                                                return Error(TeamsTooFar).into();
+                                                let caught_location =
+                                                    caught_team.location_as_point().unwrap();
+                                                let catcher_location =
+                                                    catcher_team.location_as_point().unwrap();
+                                                if geo::Geodesic
+                                                    .distance(caught_location, catcher_location)
+                                                    > 300.0
+                                                {
+                                                    return Error(TeamsTooFar).into();
+                                                }
+                                            } else {
+                                                warn!(
+                                                    "engine: session: no location for team {} or {}",
+                                                    catcher_team.name, caught_team.name
+                                                )
                                             }
-                                        } else {
-                                            warn!(
-                                                "engine: session: no location for team {} or {}",
-                                                catcher_team.name, caught_team.name
-                                            )
+                                            bounty = caught_team.bounty;
+                                            broadcast = Caught {
+                                                catcher: catcher_team.to_sendable(catcher, context),
+                                                caught: caught_team.to_sendable(caught, context),
+                                            };
                                         }
-                                        bounty = caught_team.bounty;
-                                        broadcast = Caught {
-                                            catcher: catcher_team.to_sendable(catcher, context),
-                                            caught: caught_team.to_sendable(caught, context),
-                                        };
+                                        TeamRole::Catcher => {
+                                            return Error(TeamIsCatcher(caught)).into();
+                                        }
                                     }
-                                    TeamRole::Catcher => {
-                                        return Error(TeamIsCatcher(caught)).into();
-                                    }
-                                },
+                                }
                                 None => {
                                     return Error(NotFound(format!(
                                         "caught team with id {}",
@@ -389,12 +395,11 @@ impl Session {
                         return Error(NotFound(format!("catcher team with id {}", catcher))).into();
                     }
                 };
-                let period_id;
                 let caught_zone;
                 match self.teams.get_mut(caught) {
                     Some(caught_team) => {
                         caught_zone = caught_team.current_zone_id;
-                        caught_team.be_caught(catcher);
+                        caught_team.be_caught(catcher, catcher_period_id);
                     }
                     None => {
                         return Error(NotFound(format!("caught team with id {}", caught))).into();
@@ -402,13 +407,13 @@ impl Session {
                 }
                 match self.teams.get_mut(catcher) {
                     Some(catcher_team) => {
-                        period_id = catcher_team.periods.len();
                         runtime_requests.push(catcher_team.have_caught(
                             bounty,
                             caught,
                             catcher,
                             caught_zone,
                             context,
+                            caught_period_id,
                         ));
                     }
                     None => {
@@ -417,7 +422,7 @@ impl Session {
                 }
                 InternEngineResponsePackage {
                     response: EngineResponse {
-                        response_action: Period(period_id),
+                        response_action: Period(catcher_period_id),
                         broadcast_action: Some(broadcast),
                     }
                     .into(),
@@ -723,6 +728,7 @@ impl Session {
                         catcher_team,
                         bounty,
                         not_completed,
+                        catcher_period_id: _,
                     } => Some(Event::Catch {
                         catcher_id: *catcher_team,
                         caught_id: team_id,
@@ -743,6 +749,7 @@ impl Session {
                     | PeriodContext::Catcher {
                         caught_team: _,
                         bounty: _,
+                        caught_period_id: _,
                     } => None,
                 }
             }));
@@ -791,32 +798,64 @@ impl Session {
         period_id: usize,
         pictures: Vec<RawPicture>,
         context: SessionContext,
-    ) -> InternEngineResponsePackage {
-        match self.teams.get_mut(team_id) {
-            None => Error(NotFound(format!("team with id {team_id}"))).into(),
-            Some(team) => match team.periods.get_mut(period_id) {
-                None => Error(NotFound(format!(
+    ) -> InternEngineResponseResult {
+        let period = self
+            .teams
+            .get_mut(team_id)
+            .ok_or(NotFound(format!("team with id {team_id}")))?
+            .periods
+            .get_mut(period_id)
+            .ok_or(NotFound(format!(
+                "period with index {} in team {}",
+                period_id, team_id
+            )))?;
+        let other_team_period = match period.context {
+            PeriodContext::Caught {
+                catcher_team,
+                bounty: _,
+                not_completed: _,
+                catcher_period_id,
+            } => Some((catcher_team, catcher_period_id)),
+            PeriodContext::Catcher {
+                caught_team,
+                bounty: _,
+                caught_period_id,
+            } => Some((caught_team, caught_period_id)),
+            _ => None,
+        };
+        let ids: Vec<u64> = pictures
+            .into_iter()
+            .map(|picture| {
+                context
+                    .engine_context
+                    .picture_db
+                    .add(PictureEntry::new_challenge_picture(picture))
+            })
+            .collect();
+        let num_ids = ids.len();
+        period.pictures.extend(ids.clone());
+        trace!(
+            "added {} pictures to period {} of team {}",
+            num_ids, period_id, team_id
+        );
+        if let Some((team_id, period_id)) = other_team_period {
+            let period = self
+                .teams
+                .get_mut(team_id)
+                .ok_or(NotFound(format!("team with id {team_id}")))?
+                .periods
+                .get_mut(period_id)
+                .ok_or(NotFound(format!(
                     "period with index {} in team {}",
-                    period_id, team.name
-                )))
-                .into(),
-                Some(period) => {
-                    let ids = pictures.into_iter().map(|picture| {
-                        context
-                            .engine_context
-                            .picture_db
-                            .add(PictureEntry::new_challenge_picture(picture))
-                    });
-                    let num_ids = ids.len();
-                    period.pictures.extend(ids);
-                    trace!(
-                        "added {} pictures to period {} of team {}",
-                        num_ids, period_id, team_id
-                    );
-                    Success.into()
-                }
-            },
+                    period_id, team_id
+                )))?;
+            period.pictures.extend(ids);
+            trace!(
+                "added {} pictures to period {} of team {}",
+                num_ids, period_id, team_id
+            );
         }
+        Ok(Success.into())
     }
 
     pub fn send_locations(&self, context: SessionContext) -> InternEngineResponsePackage {

@@ -1158,9 +1158,9 @@ impl Engine {
                     session_id
                 );
                 let (context, session) = self.get_contexed_session(session_id)?;
-                Ok(session
+                session
                     .contents
-                    .upload_period_pictures(team, period, pictures, context))
+                    .upload_period_pictures(team, period, pictures, context)
             }
             GetLocations(session_id) => {
                 let (context, session) = self.get_contexed_session(session_id)?;

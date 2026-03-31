@@ -1118,6 +1118,8 @@ struct PastTeam {
     end_location: Option<(f32, f32)>,
     end_challenges: Vec<InOpenChallenge>,
     periods: Vec<PastPeriod>,
+    #[serde(default)]
+    loaction_history: Vec<MinimalLocation>,
 }
 
 /// The representation of a thing that a team that particitated in a past game once did in the db
@@ -1159,6 +1161,7 @@ impl From<TeamEntry> for PastTeam {
                         .unwrap_or((0.0, 0.0)),
                 })
                 .collect(),
+            loaction_history: value.locations,
         }
     }
 }
