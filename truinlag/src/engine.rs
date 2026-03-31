@@ -24,7 +24,7 @@ use libtruinlag::{
     },
     *,
 };
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::{
     collections::HashMap,
     path::Path,
@@ -1151,6 +1151,13 @@ impl Engine {
                 team,
                 period,
             } => {
+                trace!(
+                    "received {} period pictures for period {} of team {} of session {}",
+                    pictures.len(),
+                    period,
+                    team,
+                    session_id
+                );
                 let (context, session) = self.get_contexed_session(session_id)?;
                 Ok(session
                     .contents

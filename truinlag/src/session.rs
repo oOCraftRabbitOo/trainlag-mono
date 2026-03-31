@@ -16,7 +16,7 @@ use libtruinlag::{
     commands::{BroadcastAction::*, EngineAction::*, Error::*, ResponseAction::*, *},
     *,
 };
-use log::{info, warn};
+use log::{info, trace, warn};
 use partially::Partial;
 use rand::{rng, seq::IteratorRandom};
 use serde::{Deserialize, Serialize};
@@ -807,7 +807,12 @@ impl Session {
                             .picture_db
                             .add(PictureEntry::new_challenge_picture(picture))
                     });
+                    let num_ids = ids.len();
                     period.pictures.extend(ids);
+                    trace!(
+                        "added {} pictures to period {} of team {}",
+                        num_ids, period_id, team_id
+                    );
                     Success.into()
                 }
             },
