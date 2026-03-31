@@ -131,6 +131,7 @@ pub struct EngineContext<'a> {
     past_game_db: &'a mut DBMirror<PastGame>,
     picture_db: &'a mut DBMirror<PictureEntry>,
     timer_tracker: &'a mut TimerTracker,
+    sector_db: &'a DBMirror<SectorEntry>,
 }
 
 /// A grouping of data contained within the relevant session and the engine. Its primary purpose is
@@ -967,7 +968,7 @@ pub struct ZoneEntry {
     /// The ids of the sectors that are 'close'. During ZKaff generation, if the team has no sector
     /// but a zone, only challenges in close sectors will be generated.
     #[serde(default)]
-    pub close_sectors: Vec<u64>,
+    pub sectors: Vec<u64>,
 }
 
 impl ZoneEntry {
@@ -987,7 +988,7 @@ impl ZoneEntry {
             minutes_to: self.minutes_to.clone(),
             close_sectors: {
                 let mut sectors = Vec::new();
-                for s in &self.close_sectors {
+                for s in &self.sectors {
                     sectors.push({
                         let sector = sector_db.get(*s).map_err(|_| {
                             error!("Couldn't find Sector with id {} in db while making Zone with id {} sendable, maybe it was improperly removed?", s, id);

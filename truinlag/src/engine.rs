@@ -284,6 +284,7 @@ impl Engine {
                     past_game_db: &mut self.past_games,
                     picture_db: &mut self.pictures,
                     timer_tracker: &mut self.timer_tracker,
+                    sector_db: &mut self.sectors,
                 };
                 match self.sessions.get_mut(session_id) {
                     Err(_) => Success.into(), // = do nothing
@@ -515,6 +516,7 @@ impl Engine {
                     past_game_db: &mut self.past_games,
                     picture_db: &mut self.pictures,
                     timer_tracker: &mut self.timer_tracker,
+                    sector_db: &mut self.sectors,
                 },
                 session_id,
             ),
@@ -550,7 +552,7 @@ impl Engine {
             mongus,
             s_bahn_zone,
             minutes_to: HashMap::new(),
-            close_sectors: Vec::new(),
+            sectors: Vec::new(),
         });
         Success.into()
     }
@@ -941,18 +943,15 @@ impl Engine {
         self.sectors.delete(sector_id)?;
         // this is really fucking inefficient but I don't care because who will ever remove sectors
         loop {
-            match self.challenges.find_mut(|c| c.sectors.contains(&sector_id)) {
+            match self.challenges.find_mut(|c| c.sector.contains(&sector_id)) {
                 None => break,
-                Some(challenge) => challenge.contents.sectors.retain(|s| s != &sector_id),
+                Some(challenge) => challenge.contents.sector.retain(|s| s != &sector_id),
             }
         }
         loop {
-            match self
-                .zones
-                .find_mut(|z| z.close_sectors.contains(&sector_id))
-            {
+            match self.zones.find_mut(|z| z.sectors.contains(&sector_id)) {
                 None => break,
-                Some(zone) => zone.contents.close_sectors.retain(|s| s != &sector_id),
+                Some(zone) => zone.contents.sectors.retain(|s| s != &sector_id),
             }
         }
         Ok(Success.into())
@@ -967,7 +966,7 @@ impl Engine {
         for sector_id in &sector_ids {
             let _ = self.sectors.get(*sector_id)?;
         }
-        self.zones.get_mut(zone_id)?.contents.close_sectors = sector_ids;
+        self.zones.get_mut(zone_id)?.contents.sectors = sector_ids;
         Ok(Success.into())
     }
 
