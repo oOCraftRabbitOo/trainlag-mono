@@ -482,8 +482,7 @@ impl TeamEntry {
                 .expect("team is in a sector that is not in db")
         });
 
-        //let team_zone_2 = team_zone.clone_contents();
-        // The sector is not Some or Zone is not 110, we use Zone adjacency (i.e. the "sectors" field from zones sheet)
+        // If the sector is None or Zone is not 110, we use Zone adjacency (i.e. the "sectors" field from zones sheet)
         // If it is Some, we use Sector adjacency (i.e. the "neighbors" field from sectors sheet)
         // both of these are Strings of capital letters representing sectors (e.g. "XOD")
 
@@ -499,13 +498,10 @@ impl TeamEntry {
         };
 
         let sector_filter: Filter = Rc::new(move |c| -> bool {
-            if let Some(target_sector) = Some(&c.contents.sector) {
-                target_sector
-                    .iter()
-                    .any(|sector| adjacent_sectors.contains(sector))
-            } else {
-                false
-            }
+            c.contents
+                .sector
+                .iter()
+                .any(|sector| adjacent_sectors.contains(sector))
         });
 
         let centre_zone = match zone_entries.find(|z| z.zone == config.centre_zone) {
