@@ -714,6 +714,9 @@ impl TeamEntry {
                 // one never. If ratio = 0.75, the far challenge will always ZKaff and the near one has a
                 // 50/50 chance.
                 // Also, if there are not 3 challenges, we just generate all ZKaff save one unspecific.
+                // The ZKaff challenges are to be generated in adjacent sectors to the team (not including the current sector)
+                // If a team is not in zone 110, the closest/easiest-to-reach sectors will be taken instead
+                // This is implemented in sector_filter
 
                 if config.num_challenges == 3 {
                     // generating perim challenges with max max_perim
@@ -748,7 +751,10 @@ impl TeamEntry {
                     };
                     vec![
                         if first {
-                            (vec![zkaff_filter.clone()], GC::new("zkaff"))
+                            (
+                                vec![zkaff_filter.clone(), sector_filter.clone()],
+                                GC::new("zkaff"),
+                            )
                         } else {
                             (
                                 vec![
@@ -760,7 +766,7 @@ impl TeamEntry {
                             )
                         },
                         if second {
-                            (vec![zkaff_filter], GC::new("zkaff"))
+                            (vec![zkaff_filter, sector_filter], GC::new("zkaff"))
                         } else {
                             (
                                 vec![specific_filter, perim_near_filter, max_kaff_filter],
@@ -771,7 +777,12 @@ impl TeamEntry {
                     ]
                 } else {
                     (1..config.num_challenges)
-                        .map(|_| (vec![zkaff_filter.clone()], GC::new("zkaff")))
+                        .map(|_| {
+                            (
+                                vec![zkaff_filter.clone(), sector_filter.clone()],
+                                GC::new("zkaff"),
+                            )
+                        })
                         .chain(vec![(
                             vec![unspecific_filter],
                             GC::new("unspecific").dont_zone(),
@@ -781,7 +792,7 @@ impl TeamEntry {
             }
             GenerationPeriod::EndGame => {
                 // End game challenge generation is relatively simple. 1 Challenge is ZKaff, the others are
-                // unspecific. No further restrictions apply.
+                // unspecific. The restrictions on the one Zkaff challenge stay the same. No further restrictions apply.
 
                 (1..config.num_challenges)
                     .map(|_| {
