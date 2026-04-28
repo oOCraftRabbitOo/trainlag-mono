@@ -461,6 +461,7 @@ impl ChallengeEntry {
             points: points as u64,
             action,
             zone: zone.map(|z| z.id),
+            sector: self.sector.first().cloned(), // just take the first, don't see better option rn
             id,
         }
     }
@@ -600,6 +601,7 @@ pub struct InOpenChallenge {
     pub points: u64,
     pub action: Option<ChallengeAction>,
     pub zone: Option<u64>, // id for ZoneEntry collection in db
+    pub sector: Option<u64>,
 }
 
 impl InOpenChallenge {

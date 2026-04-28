@@ -933,6 +933,7 @@ impl TeamEntry {
                 if let Some(zone) = completed.zone {
                     self.current_zone_id = zone;
                 }
+                self.current_sector_id = completed.sector;
                 self.generate_challenges(context);
                 Ok((completed, request))
             }
