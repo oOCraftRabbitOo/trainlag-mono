@@ -1101,6 +1101,14 @@ impl PastGame {
     fn new_now(game: InGame, teams: Vec<TeamEntry>) -> Self {
         Self::new(game, teams, chrono::Local::now())
     }
+
+    fn to_info(&self, id: u64) -> PastGameInfo {
+        PastGameInfo {
+            name: self.name.clone(),
+            date: self.start_time.date_naive(),
+            id,
+        }
+    }
 }
 
 /// The representation of a team that particitated in a past game in the db

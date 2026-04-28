@@ -3,8 +3,8 @@ use std::num::NonZeroU32;
 use serde::{Deserialize, Serialize};
 
 pub use libtruinlag::{
-    Challenge, CompletedChallenge, DetailedLocation, Event, MinimalLocation, Picture, Player, Team,
-    TeamRole,
+    Challenge, CompletedChallenge, DetailedLocation, Event, MinimalLocation, PastGame,
+    PastGameInfo, Picture, Player, Team, TeamRole,
 };
 
 pub mod api;
@@ -37,6 +37,8 @@ pub enum ToServer {
     },
     SetPhoneNumber(Option<String>),
     SetTeamName(String),
+    ListPastGames,
+    GetPastGame(u64),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -79,6 +81,8 @@ pub enum ToApp {
     GameStarted(Everything),
     EventOccurred(Event, Everything),
     YouLeftGracePeriod(Everything),
+    PastGame(PastGame),
+    PastGameList(Vec<PastGameInfo>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

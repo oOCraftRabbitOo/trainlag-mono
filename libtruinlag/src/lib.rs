@@ -609,3 +609,10 @@ impl Ord for Event {
         my_time.cmp(other_time)
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PastGameInfo {
+    pub name: String,
+    pub date: chrono::NaiveDate,
+    pub id: u64,
+}

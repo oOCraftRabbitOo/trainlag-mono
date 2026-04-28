@@ -185,6 +185,8 @@ pub enum EngineAction {
         zone_id: u64,
         sector_ids: Vec<u64>,
     },
+    ListPastGames,
+    ListPastGamesOfPlayer(u64),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -216,6 +218,7 @@ pub enum ResponseAction {
     },
     SendGameConfig(GameConfig),
     SendSectors(Vec<Sector>),
+    SendPastGameList(Vec<PastGameInfo>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

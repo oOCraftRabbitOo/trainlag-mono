@@ -970,8 +970,39 @@ impl Engine {
         Ok(Success.into())
     }
 
+    fn list_past_games(&self) -> InternEngineResponseResult {
+        Ok(SendPastGameList(
+            self.past_games
+                .get_all()
+                .iter()
+                .map(|pg| pg.contents.to_info(pg.id))
+                .collect(),
+        )
+        .into())
+    }
+
+    fn list_past_games_of_player(&self, player_id: u64) -> InternEngineResponseResult {
+        let _ = self.players.get(player_id)?;
+        Ok(SendPastGameList(
+            self.past_games
+                .get_all()
+                .iter()
+                .filter(|pg| {
+                    pg.contents
+                        .teams
+                        .iter()
+                        .any(|t| t.players.contains(&player_id))
+                })
+                .map(|pg| pg.contents.to_info(pg.id))
+                .collect(),
+        )
+        .into())
+    }
+
     fn handle_action(&mut self, action: EngineAction) -> InternEngineResponseResult {
         match action {
+            ListPastGamesOfPlayer(player_id) => self.list_past_games_of_player(player_id),
+            ListPastGames => self.list_past_games(),
             SetCloseSectors {
                 zone_id,
                 sector_ids,
