@@ -154,6 +154,7 @@ impl Session {
                         points: challenge.points,
                         action: None,
                         zone: None,
+                        sector: None,
                         id: 0,
                     });
                     Success.into()
