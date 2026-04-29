@@ -9,7 +9,7 @@ use super::{
 use chrono::{self, Duration as Dur, Timelike};
 use geo::Distance;
 use libtruinlag::{commands::Error, *};
-use log::{error, warn};
+use log::{error, trace, warn};
 use rand::{prelude::*, rng};
 use serde::{Deserialize, Serialize};
 
@@ -604,6 +604,7 @@ impl TeamEntry {
                         1.0.. => 1.0,
                         other => other,
                     });
+                    trace!("chose whether close challenge is regio: is_regio = {is_regio}");
                     vec![
                         if is_regio {
                             (vec![regio_filter], GC::new("regionspecific").dont_zone())
@@ -662,8 +663,10 @@ impl TeamEntry {
                         config.perim_distance_range.start,
                         ratio,
                     );
+                    trace!("calculated perimeter: {max_perim} min");
                     let perim_near_zones =
                         centre_zone.contents.zones_with_distance(0..max_perim / 2);
+                    trace!("calculated perim near zones: {:?}", perim_near_zones);
                     let perim_near_zones_2 = perim_near_zones.clone();
                     let perim_near_filter: Filter = Rc::new(move |c| -> bool {
                         c.contents
@@ -674,6 +677,7 @@ impl TeamEntry {
                     let perim_far_zones = centre_zone
                         .contents
                         .zones_with_distance(max_perim / 2..max_perim);
+                    trace!("calculated perim far zones: {:?}", perim_near_zones);
                     let perim_far_zones_2 = perim_far_zones.clone();
                     let perim_far_filter: Filter = Rc::new(move |c| -> bool {
                         c.contents
@@ -953,19 +957,27 @@ enum GenerationPeriod {
 /// Gets the currently applicable `GenerationPeriod` from the current time and a config.
 fn get_period(config: &Config) -> GenerationPeriod {
     let mut now = chrono::Local::now().time();
+    trace!("Calculating period at {now}");
     if now <= config.start_time + chrono::Duration::minutes(config.specific_minutes as i64) {
+        trace!(
+            "before start ({}) or in specific period ({} min): Specific",
+            config.start_time, config.specific_minutes
+        );
         GenerationPeriod::Specific
     } else if now >= config.end_time {
+        trace!("after end ({}): EndGame", config.end_time);
         GenerationPeriod::EndGame
     } else {
         let wiggle = chrono::Duration::seconds(rng().random_range(
             -60 * config.time_wiggle_minutes as i64..=60 * config.time_wiggle_minutes as i64,
         ));
         now += wiggle;
+        trace!("wiggled to {now}");
         let end_game_time = config.end_time - Dur::minutes(config.end_game_minutes as i64);
         let zürich_time = end_game_time - Dur::minutes(config.zkaff_minutes as i64);
         let perimeter_time = zürich_time - Dur::minutes(config.perimeter_minutes as i64);
         if now >= end_game_time {
+            trace!("after end game time ({end_game_time}): EndGame");
             GenerationPeriod::EndGame
         } else if now >= zürich_time {
             let ratio = flerp(
@@ -973,23 +985,26 @@ fn get_period(config: &Config) -> GenerationPeriod {
                 config.zkaff_ratio_range.end,
                 (now - zürich_time).num_minutes() as f64 / config.zkaff_minutes as f64,
             );
+            trace!("after zürich time ({zürich_time}): ZKaff({ratio})");
             GenerationPeriod::ZKaff(ratio)
         } else if now >= perimeter_time {
             let ratio =
                 (now - perimeter_time).num_minutes() as f64 / config.perimeter_minutes as f64;
+            trace!("after perimeter time ({perimeter_time}): Perimeter({ratio})");
             GenerationPeriod::Perimeter(ratio)
         } else {
+            trace!("none of the others apply: Normal");
             GenerationPeriod::Normal
         }
     }
 }
 
 /// It lerps
-fn lerp(a: u64, b: u64, t: f64) -> u64 {
-    (a as f64 + (b as f64 - a as f64) * t) as u64
+fn lerp(start: u64, end: u64, t: f64) -> u64 {
+    (start as f64 + (end as f64 - start as f64) * t) as u64
 }
 
 /// It lerps
-fn flerp(a: f64, b: f64, t: f64) -> f64 {
-    a + (b - a) * t
+fn flerp(start: f64, end: f64, t: f64) -> f64 {
+    start + (end - start) * t
 }
