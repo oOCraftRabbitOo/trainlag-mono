@@ -271,7 +271,7 @@ impl ChallengeEntry {
         }
 
         // point calculation
-        trace!("\n===\npointcalc for challenge {id}");
+        trace!("=== pointcalc for challenge {id} ===");
         let mut points = 0_i64;
         points += self.additional_points as i64;
         trace!(
@@ -389,7 +389,7 @@ impl ChallengeEntry {
             }
             trace!("applying fixed points => {points}");
         }
-        trace!("total calculated points are {points}\n===\n");
+        trace!("--- total calculated points are {points} ---");
 
         // generating title and description. These may be automatically generated based on the
         // place name.

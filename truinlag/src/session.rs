@@ -319,22 +319,20 @@ impl Session {
     /// Corresponds to an `EngineAction` and processes one team catching another
     pub fn catch(
         &mut self,
-        catcher: usize,
-        caught: usize,
+        catcher_id: usize,
+        caught_id: usize,
         period_id: usize,
         context: &mut SessionContext,
     ) -> InternEngineResponsePackage {
         match self.game {
             Some(_) => {
                 let catcher_period_id;
-                let caught_period_id;
-                if caught == catcher {
+                if caught_id == catcher_id {
                     return Error(BadData("a team cannot catch itself".into())).into();
                 }
-                let bounty;
                 let broadcast;
                 let mut runtime_requests = Vec::new();
-                match self.teams.get(catcher) {
+                match self.teams.get(catcher_id) {
                     Some(catcher_team) => {
                         if period_id != catcher_team.period_id() {
                             return Error(BadData(format!(
@@ -345,9 +343,8 @@ impl Session {
                             .into();
                         }
                         match catcher_team.role {
-                            TeamRole::Catcher => match self.teams.get(caught) {
+                            TeamRole::Catcher => match self.teams.get(caught_id) {
                                 Some(caught_team) => {
-                                    caught_period_id = caught_team.period_id();
                                     catcher_period_id = catcher_team.period_id();
                                     match caught_team.role {
                                         TeamRole::Runner => {
@@ -370,55 +367,56 @@ impl Session {
                                                     catcher_team.name, caught_team.name
                                                 )
                                             }
-                                            bounty = caught_team.bounty;
                                             broadcast = Caught {
-                                                catcher: catcher_team.to_sendable(catcher, context),
-                                                caught: caught_team.to_sendable(caught, context),
+                                                catcher: catcher_team
+                                                    .to_sendable(catcher_id, context),
+                                                caught: caught_team.to_sendable(caught_id, context),
                                             };
                                         }
                                         TeamRole::Catcher => {
-                                            return Error(TeamIsCatcher(caught)).into();
+                                            return Error(TeamIsCatcher(caught_id)).into();
                                         }
                                     }
                                 }
                                 None => {
                                     return Error(NotFound(format!(
                                         "caught team with id {}",
-                                        caught
+                                        caught_id
                                     )))
                                     .into();
                                 }
                             },
-                            TeamRole::Runner => return Error(TeamIsRunner(catcher)).into(),
+                            TeamRole::Runner => return Error(TeamIsRunner(catcher_id)).into(),
                         }
                     }
                     None => {
-                        return Error(NotFound(format!("catcher team with id {}", catcher))).into();
+                        return Error(NotFound(format!("catcher team with id {}", catcher_id)))
+                            .into();
                     }
                 };
-                let caught_zone;
-                match self.teams.get_mut(caught) {
+                let caught_info;
+                match self.teams.get_mut(caught_id) {
                     Some(caught_team) => {
-                        caught_zone = caught_team.current_zone_id;
-                        caught_team.be_caught(catcher, catcher_period_id);
+                        caught_info = caught_team.clone();
+                        caught_team.be_caught(catcher_id, catcher_period_id);
                     }
                     None => {
-                        return Error(NotFound(format!("caught team with id {}", caught))).into();
+                        return Error(NotFound(format!("caught team with id {}", caught_id)))
+                            .into();
                     }
                 }
-                match self.teams.get_mut(catcher) {
+                match self.teams.get_mut(catcher_id) {
                     Some(catcher_team) => {
                         runtime_requests.push(catcher_team.have_caught(
-                            bounty,
-                            caught,
-                            catcher,
-                            caught_zone,
+                            caught_id,
+                            catcher_id,
                             context,
-                            caught_period_id,
+                            caught_info,
                         ));
                     }
                     None => {
-                        return Error(NotFound(format!("catcher team with id {}", catcher))).into();
+                        return Error(NotFound(format!("catcher team with id {}", catcher_id)))
+                            .into();
                     }
                 }
                 InternEngineResponsePackage {

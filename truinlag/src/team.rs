@@ -725,8 +725,10 @@ impl TeamEntry {
                 if config.num_challenges == 3 {
                     // generating perim challenges with max max_perim
                     let max_perim = config.perim_distance_range.start;
+                    trace!("calculating perim near zones with perim {max_perim} min");
                     let perim_near_zones =
                         centre_zone.contents.zones_with_distance(0..max_perim / 2);
+                    trace!("perim near zones calculated: {:?}", perim_near_zones);
                     let perim_near_zones_2 = perim_near_zones.clone();
                     let perim_near_filter: Filter = Rc::new(move |c| -> bool {
                         c.contents
@@ -734,9 +736,11 @@ impl TeamEntry {
                             .iter()
                             .any(|z| perim_near_zones_2.contains(z))
                     });
+                    trace!("calculating perim far zones with perim {max_perim} min");
                     let perim_far_zones = centre_zone
                         .contents
                         .zones_with_distance(max_perim / 2..max_perim);
+                    trace!("perim far zones calculated: {:?}", perim_far_zones);
                     let perim_far_zones_2 = perim_far_zones.clone();
                     let perim_far_filter: Filter = Rc::new(move |c| -> bool {
                         c.contents
@@ -753,6 +757,10 @@ impl TeamEntry {
                     } else {
                         (true, true)
                     };
+                    trace!(
+                        "rolled for whether the challenges will be zkaff \
+                        with ratio {ratio}: {first}, {second}"
+                    );
                     vec![
                         if first {
                             (
@@ -873,15 +881,14 @@ impl TeamEntry {
     /// Returns a `RuntimeRequest` that starts the grace period timer.
     pub fn have_caught(
         &mut self,
-        bounty: u64,
         caught_id: usize,
         catcher_id: usize,
-        caught_zone: u64,
         context: &mut SessionContext,
-        caught_period_id: usize,
+        caught_info: TeamEntry,
     ) -> RuntimeRequest {
-        self.points += bounty;
-        self.current_zone_id = caught_zone;
+        self.points += caught_info.bounty;
+        self.current_zone_id = caught_info.current_zone_id;
+        self.current_sector_id = caught_info.current_sector_id;
         self.bounty = 0;
         self.generate_challenges(context);
         self.role = TeamRole::Runner;
@@ -895,8 +902,8 @@ impl TeamEntry {
         self.grace_period_end = Some(timer);
         self.new_period(PeriodContext::Catcher {
             caught_team: caught_id,
-            bounty,
-            caught_period_id,
+            bounty: caught_info.bounty,
+            caught_period_id: caught_info.period_id(),
         });
         request
     }
