@@ -732,7 +732,7 @@ impl Default for Config {
             underdog_starting_difference: 1000,
             underdog_multiplyer_per_1000: 0.25,
             perim_max_kaff: 4,
-            perim_distance_range: 20..61,
+            perim_distance_range: 24..61,
             normal_period_near_distance_range: 0..26,
             normal_period_far_distance_range: 40..71,
             points_per_bad_connectivity_index: 25,
