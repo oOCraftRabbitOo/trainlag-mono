@@ -665,7 +665,7 @@ impl TeamEntry {
                     );
                     trace!("calculated perimeter: {max_perim} min");
                     let perim_near_zones =
-                        centre_zone.contents.zones_with_distance(0..max_perim / 2);
+                        centre_zone.contents.zones_with_distance(0..(max_perim / 2));
                     trace!("calculated perim near zones: {:?}", perim_near_zones);
                     let perim_near_zones_2 = perim_near_zones.clone();
                     let perim_near_filter: Filter = Rc::new(move |c| -> bool {
@@ -676,7 +676,7 @@ impl TeamEntry {
                     });
                     let perim_far_zones = centre_zone
                         .contents
-                        .zones_with_distance(max_perim / 2..max_perim);
+                        .zones_with_distance((max_perim / 2)..max_perim);
                     trace!("calculated perim far zones: {:?}", perim_near_zones);
                     let perim_far_zones_2 = perim_far_zones.clone();
                     let perim_far_filter: Filter = Rc::new(move |c| -> bool {
