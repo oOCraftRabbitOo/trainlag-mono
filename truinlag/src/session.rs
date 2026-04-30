@@ -663,6 +663,15 @@ impl Session {
             requests.push(game.timer.cancel_request());
         }
 
+        // cancel grace period timers
+        requests.append(
+            &mut self
+                .teams
+                .iter_mut()
+                .filter_map(|team| team.cancel_timer())
+                .collect(),
+        );
+
         // extract and save past game
         let past_game = PastGame::new_now(self.game.take().unwrap(), self.teams.clone());
         context.engine_context.past_game_db.add(past_game);

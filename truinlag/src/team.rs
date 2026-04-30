@@ -323,26 +323,51 @@ impl TeamEntry {
         Ok(())
     }
 
+    /// Removes the team's grace period end timer and returns a cancel request if it exists
+    ///
+    /// This method is currently used in the team's reset method as well as in the game stop method.
+    /// That's why it's not just inlined below.
+    pub fn cancel_timer(&mut self) -> Option<RuntimeRequest> {
+        if self.grace_period_end.is_some() {
+            let request = self
+                .grace_period_end
+                .clone()
+                .expect("this shouldn't go wrong, checked for this just a few lines above >:(")
+                .cancel_request();
+            self.grace_period_end = None;
+            Some(request)
+        } else {
+            None
+        }
+    }
+
     /// Resets the team's points, bounty and other in game attributes.
     ///
     /// # Errors
     ///
     /// The team's zone has to be the starting zone. If that can't be found, a `NotFound` error is
     /// returned.
-    pub fn reset(&mut self, context: &SessionContext) -> Result<(), commands::Error> {
+    pub fn reset(
+        &mut self,
+        context: &SessionContext,
+    ) -> Result<Option<RuntimeRequest>, commands::Error> {
         self.challenges = Vec::new();
         self.periods = Vec::new();
         self.locations = Vec::new();
         self.role = TeamRole::Runner;
         self.points = 0;
         self.bounty = 0;
+        self.current_sector_id = None;
+        self.player_location_counts = HashMap::new();
+        self.current_location = None;
+        self.location_sending_player = None;
         self.current_zone_id = context
             .engine_context
             .zone_db
             .find(|z| z.zone == context.config.start_zone)
             .ok_or(Error::NotFound("config start zone".into()))?
             .id;
-        Ok(())
+        Ok(self.cancel_timer())
     }
 
     /// Generates new challenges for the team
@@ -725,7 +750,7 @@ impl TeamEntry {
                 if config.num_challenges == 3 {
                     // generating perim challenges with max max_perim
                     let max_perim = config.perim_distance_range.start;
-                    trace!("calculating perim near zones with perim {max_perim} min");
+                    trace!("calculating perim zones with perim {max_perim} min");
                     let perim_near_zones =
                         centre_zone.contents.zones_with_distance(0..max_perim / 2);
                     trace!("perim near zones calculated: {:?}", perim_near_zones);
@@ -736,7 +761,6 @@ impl TeamEntry {
                             .iter()
                             .any(|z| perim_near_zones_2.contains(z))
                     });
-                    trace!("calculating perim far zones with perim {max_perim} min");
                     let perim_far_zones = centre_zone
                         .contents
                         .zones_with_distance(max_perim / 2..max_perim);
