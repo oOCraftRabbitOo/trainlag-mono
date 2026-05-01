@@ -86,14 +86,14 @@ where
             let serialized =
                 bincode::serialize(&package).expect("EngineCommand should always be serializable");
             // send serialised message to truinlag
-            if let Err(_err) = transport.send(Bytes::from(serialized)).await {
+            if let Err(err) = transport.send(Bytes::from(serialized)).await {
                 // if an error is returned, the connection is assumed to be dead and everything is
                 // aborted.
                 response_info_send
-                    .send(DistributorMessage::Err(Error::Disconnect))
+                    .send(DistributorMessage::Err(Error::Disconnect(err.to_string())))
                     .await
                     .expect(res_inf_send_exp);
-                return Err(Error::Disconnect);
+                return Err(Error::Disconnect(err.to_string()));
             }
             id += 1;
         }
@@ -113,14 +113,20 @@ where
                     command_send
                         .send(DistributorMessage::Command(Box::new(command)))
                         .await
-                        .map_err(|_| Error::Disconnect)?;
+                        .map_err(|_| {
+                            Error::InternalComms("couldn't forward truinlag command to distributor")
+                        })?;
                 }
-                Err(_err) => {
+                Err(err) => {
                     command_send
-                        .send(DistributorMessage::Err(Error::Disconnect))
+                        .send(DistributorMessage::Err(Error::Disconnect(err.to_string())))
                         .await
-                        .map_err(|_| Error::Disconnect)?;
-                    return Err(Error::Disconnect);
+                        .map_err(|_| {
+                            Error::InternalComms(
+                                "couldn't forward truinlag disconnect message to distributor",
+                            )
+                        })?;
+                    return Err(Error::Disconnect(err.to_string()));
                 }
             }
         }
@@ -240,8 +246,10 @@ impl SendConnection {
         self.send_req_send
             .send(package)
             .await
-            .map_err(|_| Error::Disconnect)?;
-        resp_recv.await.map_err(|_| Error::Disconnect)
+            .map_err(|_| Error::InternalComms("couldn't send send request"))?;
+        resp_recv
+            .await
+            .map_err(|_| Error::InternalComms("couldn't receive response"))
     }
 
     pub async fn get_zones(&mut self) -> Result<Vec<Zone>> {
