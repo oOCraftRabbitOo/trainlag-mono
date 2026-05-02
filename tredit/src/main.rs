@@ -1,13 +1,16 @@
-use clap::{Arg, ArgAction, Command, value_parser};
+use clap::{Arg, ArgAction, Command};
 use clap_complete::{generate, shells::Zsh};
 use colored::Colorize;
-use libtruinlag::{Challenge, PartialGameConfig, api::connect, commands::EngineAction};
+use libtruinlag::{
+    Challenge, PartialGameConfig,
+    api::{SendConnection, connect},
+    commands::EngineAction,
+};
 
 mod interactive;
 mod parsley;
 
-async fn run_command(command: EngineAction, address: String) {
-    let (mut sender, _recvr) = connect(Some(&address)).await.unwrap();
+async fn run_command(command: EngineAction, mut sender: SendConnection) {
     match sender.send(command).await {
         Ok(response) => {
             eprintln!("{}", "Command executed successfully:".green().bold());
@@ -21,6 +24,73 @@ async fn run_command(command: EngineAction, address: String) {
             println!("{}", err);
         }
     }
+}
+
+async fn get_player_by_name(name: &str, sender: &mut SendConnection) -> u64 {
+    match name.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            sender
+                .get_global_state()
+                .await
+                .unwrap()
+                .1
+                .iter()
+                .find(|p| p.name.to_lowercase() == name.to_lowercase())
+                .expect("couldn't find player by name")
+                .id
+        }
+    }
+}
+
+async fn get_session_by_name(name: &str, sender: &mut SendConnection) -> u64 {
+    match name.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            sender
+                .get_global_state()
+                .await
+                .unwrap()
+                .0
+                .iter()
+                .find(|s| s.name.to_lowercase() == name.to_lowercase())
+                .expect("couldn't find session by name")
+                .id
+        }
+    }
+}
+
+async fn get_team_by_name(session: u64, name: &str, sender: &mut SendConnection) -> usize {
+    match name.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            sender
+                .get_session_state(session)
+                .await
+                .unwrap()
+                .0
+                .iter()
+                .find(|t| {
+                    t.name.to_lowercase() == name.to_lowercase()
+                        || t.players
+                            .iter()
+                            .any(|p| p.name.to_lowercase() == name.to_lowercase())
+                })
+                .expect("couldn't find team by name")
+                .id
+        }
+    }
+}
+
+async fn get_zone_by_number(number: u64, sender: &mut SendConnection) -> u64 {
+    sender
+        .get_zones()
+        .await
+        .unwrap()
+        .iter()
+        .find(|z| z.zone == number || z.id == number)
+        .expect("couldn't find zone")
+        .id
 }
 
 fn cli() -> Command {
@@ -53,35 +123,25 @@ fn cli() -> Command {
                 .arg(Arg::new("Name").required(true))
                 .arg(Arg::new("Passphrase").required(true))
                 .arg(
-                    Arg::new("Session ID")
+                    Arg::new("Session")
                         .required(false)
-                        .help("Will be set to None if not provided")
-                        .value_parser(value_parser!(u64)),
+                        .help("Will be set to None if not provided"),
                 ),
         )
         .subcommand(
             Command::new("set_player_session")
                 .about("Set a player's session")
+                .arg(Arg::new("Player").required(true))
                 .arg(
-                    Arg::new("Player ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Session ID")
+                    Arg::new("Session")
                         .required(false)
-                        .help("Will be set to None if not provided")
-                        .value_parser(value_parser!(u64)),
+                        .help("Will be set to None if not provided"),
                 ),
         )
         .subcommand(
             Command::new("set_player_passphrase")
                 .about("Set a player's passphrase")
-                .arg(
-                    Arg::new("Player ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
+                .arg(Arg::new("Player").required(true))
                 .arg(Arg::new("Passphrase").required(true)),
         )
         .subcommand(
@@ -92,105 +152,55 @@ fn cli() -> Command {
         .subcommand(
             Command::new("add_team")
                 .about("Add a new team to a certain session in the DB")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
+                .arg(Arg::new("Session").required(true))
                 .arg(Arg::new("Name").required(true)),
         )
         .subcommand(
             Command::new("assign")
                 .about("Assign a player to a team")
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Player").required(true))
                 .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Player ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Team ID")
+                    Arg::new("Team")
                         .required(false)
-                        .help("Player will be unassigned if not provided")
-                        .value_parser(value_parser!(usize)),
+                        .help("Player will be unassigned if not provided"),
                 ),
         )
         .subcommand(
             Command::new("get_state")
                 .about("Get the state of the database, or, optionally, a session")
                 .arg(
-                    Arg::new("Session ID")
+                    Arg::new("Session")
                         .required(false)
-                        .help("Global state fetched if not provided")
-                        .value_parser(value_parser!(u64)),
+                        .help("Global state fetched if not provided"),
                 ),
         )
         .subcommand(
             Command::new("make_catcher")
                 .about("Make a team catcher.")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Team ID")
-                        .required(true)
-                        .value_parser(value_parser!(usize)),
-                ),
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Team").required(true)),
         )
         .subcommand(
             Command::new("make_runner")
                 .about("Make a team runner.")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Team ID")
-                        .required(true)
-                        .value_parser(value_parser!(usize)),
-                ),
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Team").required(true)),
         )
         .subcommand(
             Command::new("add_challenge_to_team")
                 .about("Add a challenge to a team")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Team ID")
-                        .required(true)
-                        .value_parser(value_parser!(usize)),
-                )
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Team").required(true))
                 .arg(Arg::new("Title").required(true))
                 .arg(Arg::new("Description").required(true))
-                .arg(
-                    Arg::new("Points")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                ),
+                .arg(Arg::new("Points").required(true)),
         )
         .subcommand(
             Command::new("rename_team")
                 .about("Rename a team")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Team ID")
-                        .required(true)
-                        .value_parser(value_parser!(usize)),
-                )
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Team").required(true))
                 .arg(Arg::new("Name").required(true)),
         )
         .subcommand(
@@ -210,118 +220,61 @@ fn cli() -> Command {
         )
         .subcommand(Command::new("get_challenges").about("Get all challenges from the truinlag DB"))
         .subcommand(
-            Command::new("start").about("Start the game").arg(
-                Arg::new("Session ID")
-                    .value_parser(value_parser!(u64))
-                    .required(true),
-            ),
+            Command::new("start")
+                .about("Start the game")
+                .arg(Arg::new("Session").required(true)),
         )
         .subcommand(
-            Command::new("stop").about("Finish the game").arg(
-                Arg::new("Session ID")
-                    .required(true)
-                    .value_parser(value_parser!(u64)),
-            ),
+            Command::new("stop")
+                .about("Finish the game")
+                .arg(Arg::new("Session").required(true)),
         )
         .subcommand(Command::new("get_zones").about("Get all zones from the truinlag DB"))
         .subcommand(
             Command::new("get_locations")
                 .about("Get all teams and locations from a session")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                ),
+                .arg(Arg::new("Session").required(true)),
         )
         .subcommand(Command::new("get_challenge_sets").about("Get all challenge sets"))
         .subcommand(
             Command::new("get_game_config")
                 .about("Gets the game config from a session")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                ),
+                .arg(Arg::new("Session").required(true)),
         )
         .subcommand(
             Command::new("set_start_time")
                 .about("Set the start time of future games")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Hours")
-                        .required(true)
-                        .value_parser(value_parser!(u32)),
-                )
-                .arg(
-                    Arg::new("Minutes")
-                        .required(true)
-                        .value_parser(value_parser!(u32)),
-                ),
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Hours").required(true))
+                .arg(Arg::new("Minutes").required(true)),
         )
         .subcommand(
             Command::new("set_end_time")
                 .about("Set the end time of future games")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Hours")
-                        .required(true)
-                        .value_parser(value_parser!(u32)),
-                )
-                .arg(
-                    Arg::new("Minutes")
-                        .required(true)
-                        .value_parser(value_parser!(u32)),
-                ),
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Hours").required(true))
+                .arg(Arg::new("Minutes").required(true)),
         )
         .subcommand(
             Command::new("set_start_zone")
                 .about("Set the start zone of future games")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Zone")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                ),
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Zone").required(true)),
         )
         .subcommand(
             Command::new("set_num_catchers")
                 .about("Set the number of hunters in future games")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Number of hunters")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                ),
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Number of hunters").required(true)),
         )
         .subcommand(
             Command::new("set_challenge_sets")
                 .about("Set the challenge sets that are used in future games")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
+                .arg(Arg::new("Session").required(true))
                 .arg(
                     Arg::new("Challenge Set ID")
                         .action(ArgAction::Append)
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
+                        .required(true),
                 ),
         )
         .subcommand(
@@ -331,25 +284,13 @@ fn cli() -> Command {
         .subcommand(
             Command::new("remove_team")
                 .about("Remove a team")
-                .arg(
-                    Arg::new("Session ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
-                .arg(
-                    Arg::new("Team ID")
-                        .required(true)
-                        .value_parser(value_parser!(usize)),
-                ),
+                .arg(Arg::new("Session").required(true))
+                .arg(Arg::new("Team").required(true)),
         )
         .subcommand(
             Command::new("rename_player")
                 .about("Rename a player")
-                .arg(
-                    Arg::new("Player ID")
-                        .required(true)
-                        .value_parser(value_parser!(u64)),
-                )
+                .arg(Arg::new("Player").required(true))
                 .arg(Arg::new("Name").required(true)),
         )
         .subcommand(Command::new("get_sectors").about("Get all sectors"))
@@ -378,31 +319,45 @@ async fn main() {
         }
         Some(args) => args,
     };
+    let (mut sender, _recvr) = connect(Some(&address)).await.unwrap();
 
     match name.as_str() {
-        "get_sectors" => run_command(EngineAction::GetSectors, address).await,
+        "get_sectors" => run_command(EngineAction::GetSectors, sender).await,
 
         "rename_player" => {
-            let player_id = sub_args.remove_one("Player ID").expect("required");
+            let player_id = get_session_by_name(
+                sub_args.get_one::<String>("Player").expect("required"),
+                &mut sender,
+            )
+            .await;
             let name = sub_args.remove_one("Name").expect("required");
             run_command(
                 EngineAction::RenamePlayer {
                     player_id,
                     new_name: name,
                 },
-                address,
+                sender,
             )
             .await
         }
         "remove_team" => {
-            let session_id = sub_args.remove_one("Session ID").expect("required");
-            let team_id = sub_args.remove_one("Team ID").expect("required");
+            let session_id = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            let team_id = get_team_by_name(
+                session_id,
+                sub_args.get_one::<String>("Team").expect("required"),
+                &mut sender,
+            )
+            .await;
             run_command(
                 EngineAction::RemoveTeam {
                     session_id,
                     team_id,
                 },
-                address,
+                sender,
             )
             .await
         }
@@ -410,9 +365,11 @@ async fn main() {
             println!("{}", address);
         }
         "set_challenge_sets" => {
-            let session = sub_args
-                .remove_one::<u64>("Session ID")
-                .expect("session must be supplied");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
             let sets = sub_args
                 .remove_many::<u64>("Challenge Set ID")
                 .unwrap()
@@ -426,13 +383,17 @@ async fn main() {
                     session_id: session,
                     config,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "set_num_catchers" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
             let num_catchers = sub_args.remove_one::<u64>("Number of hunters").unwrap();
             let config = PartialGameConfig {
                 num_catchers: Some(num_catchers),
@@ -440,16 +401,20 @@ async fn main() {
             };
             run_command(
                 EngineAction::SetGameConfig {
-                    session_id: session.expect("session must be supplied"),
+                    session_id: session,
                     config,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "set_start_zone" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
             let zone = sub_args.remove_one::<u64>("Zone").unwrap();
             let config = PartialGameConfig {
                 start_zone: Some(zone),
@@ -457,16 +422,20 @@ async fn main() {
             };
             run_command(
                 EngineAction::SetGameConfig {
-                    session_id: session.expect("session must be supplied"),
+                    session_id: session,
                     config,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "set_end_time" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
             let hours = sub_args.remove_one::<u32>("Hours").unwrap();
             let minutes = sub_args.remove_one::<u32>("Minutes").unwrap();
             let time = chrono::NaiveTime::from_hms_opt(hours, minutes, 0).unwrap();
@@ -476,16 +445,20 @@ async fn main() {
             };
             run_command(
                 EngineAction::SetGameConfig {
-                    session_id: session.unwrap(),
+                    session_id: session,
                     config,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "set_start_time" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
             let hours = sub_args.remove_one::<u32>("Hours").unwrap();
             let minutes = sub_args.remove_one::<u32>("Minutes").unwrap();
             let time = chrono::NaiveTime::from_hms_opt(hours, minutes, 0).unwrap();
@@ -495,71 +468,102 @@ async fn main() {
             };
             run_command(
                 EngineAction::SetGameConfig {
-                    session_id: session.unwrap(),
+                    session_id: session,
                     config,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "get_game_config" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(EngineAction::GetGameConfig(session.unwrap()), address).await
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            run_command(EngineAction::GetGameConfig(session), sender).await
         }
 
-        "get_challenge_sets" => run_command(EngineAction::GetChallengeSets, address).await,
+        "get_challenge_sets" => run_command(EngineAction::GetChallengeSets, sender).await,
 
         "get_locations" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(EngineAction::GetLocations(session.unwrap()), address).await
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            run_command(EngineAction::GetLocations(session), sender).await
         }
 
-        "get_zones" => run_command(EngineAction::GetAllZones, address).await,
+        "get_zones" => run_command(EngineAction::GetAllZones, sender).await,
 
         "stop" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(EngineAction::Stop(session.unwrap()), address).await
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            run_command(EngineAction::Stop(session), sender).await
         }
 
         "start" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(EngineAction::Start(session.unwrap()), address).await
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            run_command(EngineAction::Start(session), sender).await
         }
 
-        "get_challenges" => run_command(EngineAction::GetRawChallenges, address).await,
+        "get_challenges" => run_command(EngineAction::GetRawChallenges, sender).await,
 
         "delete_challenges" => {
             if sub_args.contains_id("yes")
                 || interactive::get_input("Are you sure (yes/no) ").as_str() == "yes"
             {
-                run_command(EngineAction::DeleteAllChallenges, address).await
+                run_command(EngineAction::DeleteAllChallenges, sender).await
             }
         }
 
-        "import" => {
-            let (sender, _recvr) = connect(Some(&address)).await.unwrap();
-            interactive::import_challenges(sender).await
-        }
+        "import" => interactive::import_challenges(sender).await,
 
         "rename_team" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
-            let team = sub_args.remove_one::<usize>("Team ID").expect("required");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            let team = get_team_by_name(
+                session,
+                sub_args.get_one::<String>("Team").expect("required"),
+                &mut sender,
+            )
+            .await;
             let name = sub_args.remove_one::<String>("Name").expect("required");
             run_command(
                 EngineAction::RenameTeam {
-                    session_id: session.expect("session must be supplied"),
+                    session_id: session,
                     team,
                     new_name: name,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "add_challenge_to_team" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
-            let team = sub_args.remove_one::<usize>("Team ID").expect("required");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            let team = get_team_by_name(
+                session,
+                sub_args.get_one::<String>("Team").expect("required"),
+                &mut sender,
+            )
+            .await;
             let title = sub_args.remove_one::<String>("Title").expect("required");
             let description = sub_args
                 .remove_one::<String>("Description")
@@ -567,7 +571,7 @@ async fn main() {
             let points = sub_args.remove_one::<u64>("Points").expect("required");
             run_command(
                 EngineAction::AddChallengeToTeam {
-                    session_id: session.unwrap(),
+                    session_id: session,
                     team,
                     challenge: Challenge {
                         title,
@@ -576,71 +580,109 @@ async fn main() {
                         id: 0,
                     },
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "make_runner" => {
-            let session = sub_args.remove_one::<u64>("Session ID").expect("required");
-            let team = sub_args.remove_one::<usize>("Team ID").expect("required");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            let team = get_team_by_name(
+                session,
+                sub_args.get_one::<String>("Team").expect("required"),
+                &mut sender,
+            )
+            .await;
             run_command(
                 EngineAction::MakeTeamRunner {
                     session_id: session,
                     team_id: team,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "make_catcher" => {
-            let session = sub_args.remove_one::<u64>("Session ID").expect("required");
-            let team = sub_args.remove_one::<usize>("Team ID").expect("required");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            let team = get_team_by_name(
+                session,
+                sub_args.get_one::<String>("Team").expect("required"),
+                &mut sender,
+            )
+            .await;
             run_command(
                 EngineAction::MakeTeamCatcher {
                     session_id: session,
                     team_id: team,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "get_state" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
-            run_command(EngineAction::GetState(session), address).await
+            let session = sub_args.get_one::<String>("Session");
+            let session = match session {
+                None => None,
+                Some(s) => Some(get_session_by_name(s, &mut sender).await),
+            };
+            run_command(EngineAction::GetState(session), sender).await
         }
 
         "assign" => {
-            let session = sub_args.remove_one::<u64>("Session ID");
-            let player = sub_args.remove_one::<u64>("Player ID").expect("required");
-            let team = sub_args.remove_one::<usize>("Team ID");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            let player = get_player_by_name(
+                sub_args.get_one::<String>("Player").expect("required"),
+                &mut sender,
+            )
+            .await;
+            let team = sub_args.get_one::<String>("Team");
+            let team = match team {
+                None => None,
+                Some(t) => Some(get_team_by_name(session, t, &mut sender).await),
+            };
             run_command(
                 EngineAction::AssignPlayerToTeam {
-                    session_id: session.unwrap(),
+                    session_id: session,
                     player,
                     team,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "add_team" => {
-            let session = sub_args.get_one::<u64>("Session ID").expect("required");
+            let session = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
             let name = sub_args
                 .get_one::<String>("Name")
                 .expect("required")
                 .clone();
             run_command(
                 EngineAction::AddTeam {
-                    session_id: *session,
+                    session_id: session,
                     name,
                     discord_channel: None,
                     colour: None,
                 },
-                address,
+                sender,
             )
             .await
         }
@@ -655,38 +697,39 @@ async fn main() {
                     name,
                     mode: libtruinlag::Mode::Traditional,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "set_player_passphrase" => {
-            let id = sub_args.get_one("Player ID").expect("required");
+            let id = get_player_by_name(
+                sub_args.get_one::<String>("Player").expect("required"),
+                &mut sender,
+            )
+            .await;
             let passphrase = sub_args
                 .get_one::<String>("Passphrase")
                 .expect("required")
                 .clone();
             run_command(
                 EngineAction::SetPlayerPassphrase {
-                    player: *id,
+                    player: id,
                     passphrase,
                 },
-                address,
+                sender,
             )
             .await
         }
 
         "set_player_session" => {
-            let id = sub_args.get_one::<u64>("Player ID").expect("required");
-            let session = sub_args.get_one::<u64>("Session ID").cloned();
-            run_command(
-                EngineAction::SetPlayerSession {
-                    player: *id,
-                    session,
-                },
-                address,
+            let player = get_player_by_name(
+                sub_args.get_one::<String>("Player").expect("required"),
+                &mut sender,
             )
-            .await
+            .await;
+            let session = sub_args.get_one::<u64>("Session").cloned();
+            run_command(EngineAction::SetPlayerSession { player, session }, sender).await
         }
 
         "add_player" => {
@@ -698,15 +741,19 @@ async fn main() {
                 .get_one::<String>("Passphrase")
                 .expect("required")
                 .clone();
-            let session = sub_args.get_one::<u64>("Session ID").cloned();
+            let session = sub_args.get_one::<String>("Session").cloned();
+            let session_id = match session {
+                None => None,
+                Some(session) => Some(get_session_by_name(&session, &mut sender).await),
+            };
             run_command(
                 EngineAction::AddPlayer {
                     name,
                     discord_id: None,
                     passphrase,
-                    session,
+                    session: session_id,
                 },
-                address,
+                sender,
             )
             .await
         }

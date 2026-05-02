@@ -637,7 +637,7 @@ pub struct Config {
     /// 40% is recommended and 35% if less experienced teams are present.
     /// *Recommended Value:* **~40% of the player count (rounded down)**
     pub num_catchers: u64,
-    /// The ZVV zone in which the game starts.
+    /// The ZVV zone in which the game starts (the zone, not its id).
     /// *Recommended Value:* **Zone in which the game starts (probably 110)**
     pub start_zone: u64,
     /// Whenever a team catches another, they should be invincible and invisible for some amount of

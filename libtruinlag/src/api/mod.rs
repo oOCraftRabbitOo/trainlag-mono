@@ -253,13 +253,10 @@ impl SendConnection {
     }
 
     pub async fn get_zones(&mut self) -> Result<Vec<Zone>> {
-        match self.send(EngineAction::GetAllZones).await {
-            Ok(response) => match response {
-                ResponseAction::SendZones(zones) => Ok(zones),
-                ResponseAction::Error(err) => Err(Error::Truinlag(err)),
-                other => Err(Error::InvalidSignal(format!("{:?}", other))),
-            },
-            Err(err) => Err(err),
+        match self.send(EngineAction::GetAllZones).await? {
+            ResponseAction::SendZones(zones) => Ok(zones),
+            ResponseAction::Error(err) => Err(Error::Truinlag(err)),
+            other => Err(Error::InvalidSignal(format!("{:?}", other))),
         }
     }
 
@@ -272,23 +269,31 @@ impl SendConnection {
     }
 
     pub async fn delete_all_challenges(&mut self) -> Result<()> {
-        match self.send(EngineAction::DeleteAllChallenges).await {
-            Ok(response) => match response {
-                ResponseAction::Success => Ok(()),
-                ResponseAction::Error(err) => Err(Error::Truinlag(err)),
-                other => Err(Error::InvalidSignal(format!("{:?}", other))),
-            },
-            Err(err) => Err(err),
+        match self.send(EngineAction::DeleteAllChallenges).await? {
+            ResponseAction::Success => Ok(()),
+            ResponseAction::Error(err) => Err(Error::Truinlag(err)),
+            other => Err(Error::InvalidSignal(format!("{:?}", other))),
         }
     }
 
     pub async fn get_global_state(&mut self) -> Result<(Vec<GameSession>, Vec<Player>)> {
-        match self.send(EngineAction::GetState(None)).await {
-            Ok(thing) => match thing {
-                ResponseAction::SendGlobalState { sessions, players } => Ok((sessions, players)),
-                other => Err(Error::InvalidSignal(format!("{:?}", other))),
-            },
-            Err(err) => Err(err),
+        match self.send(EngineAction::GetState(None)).await? {
+            ResponseAction::SendGlobalState { sessions, players } => Ok((sessions, players)),
+            other => Err(Error::InvalidSignal(format!("{:?}", other))),
+        }
+    }
+
+    pub async fn get_session_state(
+        &mut self,
+        id: u64,
+    ) -> Result<(Vec<Team>, Vec<Event>, Option<Game>)> {
+        match self.send(EngineAction::GetState(Some(id))).await? {
+            ResponseAction::SendState {
+                teams,
+                events,
+                game,
+            } => Ok((teams, events, game)),
+            other => Err(Error::InvalidSignal(format!("{:?}", other))),
         }
     }
 
