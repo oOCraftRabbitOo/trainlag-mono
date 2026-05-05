@@ -187,6 +187,7 @@ pub enum EngineAction {
     },
     ListPastGames,
     ListPastGamesOfPlayer(u64),
+    GetPastGame(u64),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -219,6 +220,7 @@ pub enum ResponseAction {
     SendGameConfig(GameConfig),
     SendSectors(Vec<Sector>),
     SendPastGameList(Vec<PastGameInfo>),
+    SendPastGame(PastGame),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -1,5 +1,5 @@
 use crate::{
-    ClonedDBEntry, DBMirror, EngineContext, EngineSchema, MutDBEntry, PastGame, PictureEntry,
+    ClonedDBEntry, DBMirror, EngineContext, EngineSchema, MutDBEntry, PastGameEntry, PictureEntry,
     PlayerEntry, SectorEntry, SessionContext, TimerTracker, ZoneEntry,
     challenge::{ChallengeEntry, ChallengeSetEntry},
     runtime::{
@@ -114,7 +114,7 @@ pub struct Engine {
     zones: DBMirror<ZoneEntry>,
     sectors: DBMirror<SectorEntry>,
     players: DBMirror<PlayerEntry>,
-    past_games: DBMirror<PastGame>,
+    past_games: DBMirror<PastGameEntry>,
     pictures: DBMirror<PictureEntry>,
 
     // pictures: Vec<u64>,
@@ -440,7 +440,7 @@ impl Engine {
                                 .unwrap();
                                 vec_overwrite_in_transaction(past_game_changes, &mut transaction)
                                     .unwrap();
-                                vec_delete_in_transaction::<PastGame>(
+                                vec_delete_in_transaction::<PastGameEntry>(
                                     past_game_deletions,
                                     &mut transaction,
                                     &db,
@@ -999,8 +999,19 @@ impl Engine {
         .into())
     }
 
+    fn get_past_game(&self, past_game_id: u64) -> InternEngineResponseResult {
+        let past_game = self.past_games.get(past_game_id)?;
+        Ok(SendPastGame(
+            past_game
+                .contents
+                .to_sendable(past_game.id, &self.players)?,
+        )
+        .into())
+    }
+
     fn handle_action(&mut self, action: EngineAction) -> InternEngineResponseResult {
         match action {
+            GetPastGame(past_game_id) => self.get_past_game(past_game_id),
             ListPastGamesOfPlayer(player_id) => self.list_past_games_of_player(player_id),
             ListPastGames => self.list_past_games(),
             SetCloseSectors {

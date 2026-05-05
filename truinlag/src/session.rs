@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use crate::{
-    Config, EngineContext, InGame, PartialConfig, PastGame, PictureEntry, SessionContext,
+    Config, EngineContext, InGame, PartialConfig, PastGameEntry, PictureEntry, SessionContext,
     challenge::InOpenChallenge,
     runtime::{
         InternEngineCommand, InternEngineResponse, InternEngineResponsePackage,
@@ -673,7 +673,7 @@ impl Session {
         );
 
         // extract and save past game
-        let past_game = PastGame::new_now(self.game.take().unwrap(), self.teams.clone());
+        let past_game = PastGameEntry::new_now(self.game.take().unwrap(), self.teams.clone());
         context.engine_context.past_game_db.add(past_game);
 
         // reset teams

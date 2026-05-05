@@ -10,6 +10,7 @@ use bonsaidb::{
     local::Database,
 };
 use challenge::{ChallengeEntry, ChallengeSetEntry, InOpenChallenge};
+use chrono::Timelike;
 use error::Result;
 use libtruinlag::{commands::EngineAction, *};
 use log::error;
@@ -17,7 +18,7 @@ use partially::Partial;
 use runtime::{InternEngineCommand, RuntimeRequest, manager};
 use serde::{Deserialize, Serialize};
 use session::Session;
-use std::{any::type_name, collections::HashMap, ops::Range};
+use std::{any::type_name, collections::HashMap, default, ops::Range};
 use team::{PeriodContext, TeamEntry};
 
 /// this just starts the manager from the runtime :)
@@ -33,9 +34,9 @@ async fn main() -> Result<()> {
 /// not actually running.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TimerHook {
-    payload: InternEngineCommand,
-    end_time: chrono::DateTime<chrono::Local>,
-    id: u64,
+    pub payload: InternEngineCommand,
+    pub end_time: chrono::DateTime<chrono::Local>,
+    pub id: u64,
 }
 
 // This implementation exists for db backwards compatibility.
@@ -128,7 +129,7 @@ pub struct EngineContext<'a> {
     challenge_db: &'a DBMirror<ChallengeEntry>,
     challenge_set_db: &'a DBMirror<ChallengeSetEntry>,
     zone_db: &'a DBMirror<ZoneEntry>,
-    past_game_db: &'a mut DBMirror<PastGame>,
+    past_game_db: &'a mut DBMirror<PastGameEntry>,
     picture_db: &'a mut DBMirror<PictureEntry>,
     timer_tracker: &'a mut TimerTracker,
     sector_db: &'a DBMirror<SectorEntry>,
@@ -875,7 +876,7 @@ impl From<PartialGameConfig> for PartialConfig {
 
 /// Some bonsaidb thing to make the db work
 #[derive(Schema)]
-#[schema(name="engine", collections=[Session, PlayerEntry, ChallengeEntry, ZoneEntry, SectorEntry, PastGame, PictureEntry, ChallengeSetEntry])]
+#[schema(name="engine", collections=[Session, PlayerEntry, ChallengeEntry, ZoneEntry, SectorEntry, PastGameEntry, PictureEntry, ChallengeSetEntry])]
 struct EngineSchema {}
 
 #[derive(Debug, Collection, Serialize, Deserialize, Clone)]
@@ -1077,7 +1078,7 @@ impl InGame {
 /// The representation of a past game in the db
 #[derive(Debug, Clone, Serialize, Deserialize, Collection)]
 #[collection(name = "past game")]
-struct PastGame {
+struct PastGameEntry {
     name: String,
     start_time: chrono::DateTime<chrono::Local>,
     end_time: chrono::DateTime<chrono::Local>,
@@ -1085,7 +1086,7 @@ struct PastGame {
     teams: Vec<PastTeam>,
 }
 
-impl PastGame {
+impl PastGameEntry {
     fn new(game: InGame, teams: Vec<TeamEntry>, end_time: chrono::DateTime<chrono::Local>) -> Self {
         Self {
             name: game.name,
@@ -1109,12 +1110,92 @@ impl PastGame {
             id,
         }
     }
+
+    fn to_sendable(
+        &self,
+        id: u64,
+        player_db: &DBMirror<PlayerEntry>,
+    ) -> Result<PastGame, commands::Error> {
+        Ok(PastGame {
+            start_time: self.start_time.timestamp(),
+            end_time: self.end_time.timestamp(),
+            mode: self.mode,
+            teams: self
+                .teams
+                .iter()
+                .map(|t| t.to_sendable(player_db))
+                .collect::<Result<_, _>>()?,
+            id,
+            events: {
+                let mut unsorted: Vec<Event> = self
+                    .teams
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| {
+                        t.periods
+                            .iter()
+                            .filter_map(|p| match p.context.clone() {
+                                PeriodContext::CompletedChallenge {
+                                    title,
+                                    description,
+                                    zone: _,
+                                    points,
+                                    id,
+                                    not_completed,
+                                } => Some(Event::Complete {
+                                    challenge: Challenge {
+                                        title,
+                                        description,
+                                        points,
+                                        id,
+                                    },
+                                    not_completed,
+                                    completer_id: i,
+                                    time: p.end_time.num_seconds_from_midnight(),
+                                    picture_ids: p.pictures.clone(),
+                                    location: MinimalLocation {
+                                        latitude: p.end_location.0,
+                                        longitude: p.end_location.1,
+                                        timestamp: p.end_time.timestamp(),
+                                    },
+                                }),
+                                PeriodContext::Caught {
+                                    catcher_team,
+                                    bounty,
+                                    not_completed,
+                                    catcher_period_id: _,
+                                } => Some(Event::Catch {
+                                    catcher_id: catcher_team,
+                                    caught_id: i,
+                                    bounty,
+                                    time: p.end_time.num_seconds_from_midnight(),
+                                    picture_ids: p.pictures.clone(),
+                                    location: MinimalLocation {
+                                        latitude: p.end_location.0,
+                                        longitude: p.end_location.1,
+                                        timestamp: p.end_time.timestamp(),
+                                    },
+                                    not_completed,
+                                }),
+                                _ => None,
+                            })
+                            .collect::<Vec<Event>>()
+                    })
+                    .flatten()
+                    .collect();
+                unsorted.sort();
+                unsorted
+            },
+        })
+    }
 }
 
 /// The representation of a team that particitated in a past game in the db
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PastTeam {
     name: String,
+    #[serde(default)]
+    picture: Option<u64>,
     players: Vec<u64>,
     discord_channel: Option<u64>,
     end_role: TeamRole,
@@ -1128,6 +1209,8 @@ struct PastTeam {
     periods: Vec<PastPeriod>,
     #[serde(default)]
     loaction_history: Vec<MinimalLocation>,
+    #[serde(default)]
+    grace_period_end: Option<i64>,
 }
 
 /// The representation of a thing that a team that particitated in a past game once did in the db
@@ -1136,6 +1219,8 @@ struct PastPeriod {
     pub context: PeriodContext,
     pub end_time: chrono::DateTime<chrono::Local>,
     pub end_location: (f32, f32),
+    #[serde(default)]
+    pub pictures: Vec<u64>,
 }
 
 impl From<TeamEntry> for PastTeam {
@@ -1146,6 +1231,7 @@ impl From<TeamEntry> for PastTeam {
         let end_location = end_location.map(|v| (v.latitude, v.longitude));
         Self {
             name: value.name,
+            picture: value.picture,
             players: value.players,
             discord_channel: value.discord_channel,
             end_role: value.role,
@@ -1167,9 +1253,68 @@ impl From<TeamEntry> for PastTeam {
                         .get(p.location_end_index)
                         .map(|l| (l.latitude, l.longitude))
                         .unwrap_or((0.0, 0.0)),
+                    pictures: p.pictures.clone(),
                 })
                 .collect(),
             loaction_history: value.locations,
+            grace_period_end: value.grace_period_end.map(|hook| hook.end_time.timestamp()),
         }
+    }
+}
+
+impl PastTeam {
+    fn to_sendable(&self, player_db: &DBMirror<PlayerEntry>) -> Result<Team, commands::Error> {
+        Ok(Team {
+            role: self.end_role,
+            name: self.name.clone(),
+            picture_id: self.picture,
+            id: 0,
+            colour: self.colour,
+            bounty: self.bounty,
+            points: self.points,
+            players: self
+                .players
+                .iter()
+                .map(|p| player_db.get(*p).map(|e| e.contents.to_sendable(e.id)))
+                .collect::<Result<Vec<_>, commands::Error>>()?,
+            challenges: self
+                .end_challenges
+                .iter()
+                .map(InOpenChallenge::to_sendable)
+                .collect(),
+            completed_challenges: self
+                .periods
+                .iter()
+                .filter_map(|p| match p.context.clone() {
+                    PeriodContext::CompletedChallenge {
+                        not_completed,
+                        title,
+                        description,
+                        zone: _,
+                        points,
+                        id,
+                    } => Some(CompletedChallenge {
+                        title,
+                        description,
+                        points,
+                        id,
+                        time: p.end_time.time().num_seconds_from_midnight(),
+                        not_completed,
+                        picture_ids: p.pictures.clone(),
+                    }),
+                    _ => None,
+                })
+                .collect(),
+            location: self.end_location.map(|l| DetailedLocation {
+                latitude: l.0,
+                longitude: l.1,
+                accuracy: 0,
+                heading: 0_f32,
+                speed: 0_f32,
+                timestamp: 0,
+            }),
+            grace_period_end: self.grace_period_end,
+            period_id: self.periods.len(),
+        })
     }
 }

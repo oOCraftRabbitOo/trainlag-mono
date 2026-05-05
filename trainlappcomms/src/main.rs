@@ -33,6 +33,7 @@ async fn get_everything(
 fn response_to_to_app(response: ResponseAction, player_id: u64, session_id: u64) -> Option<ToApp> {
     use ResponseAction::*;
     match response {
+        SendPastGame(past_game) => Some(ToApp::PastGame(past_game)),
         SendPastGameList(past_games) => Some(ToApp::PastGameList(past_games)),
         Error(err) => {
             eprintln!("{}", err);
@@ -246,8 +247,8 @@ fn to_server_to_engine_command(
 ) -> EngineCommandConversion {
     use ToServer::*;
     match to_server {
-        GetPastGame(past_game_id) => EngineAction::GetPastGame(past_game_id),
-        ListPastGames => EngineAction::ListPastGamesOfPlayer(player_id),
+        GetPastGame(past_game_id) => EngineAction::GetPastGame(past_game_id).into(),
+        ListPastGames => EngineAction::ListPastGamesOfPlayer(player_id).into(),
         SetTeamName(name) => EngineAction::RenameTeam {
             session_id: session,
             team: team_id,

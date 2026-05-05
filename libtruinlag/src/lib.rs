@@ -616,3 +616,13 @@ pub struct PastGameInfo {
     pub date: chrono::NaiveDate,
     pub id: u64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PastGame {
+    pub start_time: Timestamp,
+    pub end_time: Timestamp,
+    pub mode: Mode,
+    pub teams: Vec<Team>,
+    pub events: Vec<Event>,
+    pub id: u64,
+}
