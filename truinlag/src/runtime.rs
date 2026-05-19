@@ -6,11 +6,11 @@ use async_broadcast as broadcast;
 use libtruinlag::commands::{self, *};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
-use std::{future::Future, marker::Unpin, path::Path};
+use std::path::Path;
 use tokio::{
     net, select,
-    sync::{Mutex, mpsc, oneshot},
-    task::{JoinError, JoinHandle},
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
     time::Duration,
 };
 
@@ -160,8 +160,6 @@ impl From<RuntimeRequest> for InternEngineResponsePackage {
 }
 
 pub async fn manager() -> Result<()> {
-    type TaskList =
-        std::rc::Rc<Mutex<Vec<Box<dyn Future<Output = Result<(), JoinError>> + Unpin>>>>;
     let (mpsc_tx, mpsc_rx) = mpsc::channel::<EngineSignal>(1024);
 
     let mpsc_tx_staller = mpsc_tx.clone();
@@ -184,15 +182,7 @@ pub async fn manager() -> Result<()> {
     let (ctrlc_cancel, rx) = oneshot::channel();
     let ctrlc_handle = tokio::spawn(async move { ctrlc(ctrlc_tx, rx).await });
 
-    // I could have just used an mpsc channel I think. That's all I do with this mutex.
-    // I dump the io task futures into there and then, later, I take them all out.
-    // Why did I use a mutex???
-    // I guess this way there is no hard limit on the amount of connections...
-    let io_tasks = std::rc::Rc::new(Mutex::new(Vec::<
-        Box<dyn Future<Output = Result<(), JoinError>> + Unpin>,
-    >::new()));
-
-    let io_tasks_2 = io_tasks.clone();
+    let (io_task_sender, mut io_task_receiver) = mpsc::unbounded_channel::<JoinHandle<()>>();
 
     let socket = format!(
         "/tmp/truinsocket_{}{}",
@@ -202,31 +192,33 @@ pub async fn manager() -> Result<()> {
 
     info!("Manager: binding to socket {}", socket);
     let listener = net::UnixListener::bind(&socket).expect(
-        "Manager: cannot bind to socket (maybe other instance running, truinlag improperly terminated, etc.)",
+        "Manager: cannot bind to socket \
+            (maybe other instance running, truinlag improperly terminated, etc.)",
     );
 
     let accept_connections = async move {
         async fn make_io_task(
             stream: net::UnixStream,
             sender: mpsc::Sender<EngineSignal>,
-            tasks: TaskList,
             addr: tokio::net::unix::SocketAddr,
-        ) -> Result<()> {
+        ) {
             let (broadcast_rx_tx, broadcast_rx_rx) = oneshot::channel();
-            sender
+            if let Err(err) = sender
                 .send(EngineSignal::BroadcastRequest(broadcast_rx_tx))
-                .await?;
-            let broadcast_rx = broadcast_rx_rx.await?;
+                .await
+            {
+                error!("Manager: couldn't send BroadcastRequest to engine: {err}");
+                return;
+            }
+            let broadcast_rx = match broadcast_rx_rx.await {
+                Err(err) => {
+                    error!("Manager: couldn't receive broadcast channel from engine: {err}");
+                    return;
+                }
+                Ok(ok) => ok,
+            };
 
-            let io_handle = tokio::spawn(async move {
-                io(sender, broadcast_rx, stream, addr).await;
-            });
-
-            let mut tasks = tasks.lock().await;
-
-            tasks.push(Box::new(io_handle));
-
-            Ok(())
+            io(sender, broadcast_rx, stream, addr).await
         }
 
         info!("Manager: starting to accept new connections");
@@ -236,14 +228,14 @@ pub async fn manager() -> Result<()> {
 
             match stream {
                 Ok((stream, addr)) => {
-                    make_io_task(stream, mpsc_tx_staller.clone(), io_tasks_2.clone(), addr)
-                        .await
-                        .unwrap_or_else(|err| {
-                            error!(
-                                "Manager: Encountered an error creating new i/o task, continuing: {}",
-                                err
-                            )
-                        });
+                    if let Err(err) = io_task_sender.send(tokio::spawn(make_io_task(
+                        stream,
+                        mpsc_tx_staller.clone(),
+                        addr,
+                    ))) {
+                        error!("Manager: couldn't send io task to queue, stopping: {err}");
+                        break;
+                    }
                 }
                 Err(err) => error!(
                     "Manager: Error accepting new connection, continuing: {}",
@@ -276,11 +268,9 @@ pub async fn manager() -> Result<()> {
     info!("Manager: shutting down (timeout {}s)", timeout_secs);
 
     let await_io_tasks = async move {
-        let mut io_tasks = io_tasks.lock().await;
-
         info!("Manager: awaiting io tasks");
 
-        for task in io_tasks.iter_mut() {
+        while let Ok(task) = io_task_receiver.try_recv() {
             match task.await {
                 Ok(_) => {}
                 Err(err) => warn!("Manager: error joining io task: {}", err),

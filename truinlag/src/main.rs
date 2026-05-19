@@ -18,7 +18,7 @@ use partially::Partial;
 use runtime::{InternEngineCommand, RuntimeRequest, manager};
 use serde::{Deserialize, Serialize};
 use session::Session;
-use std::{any::type_name, collections::HashMap, default, ops::Range};
+use std::{any::type_name, collections::HashMap, ops::Range};
 use team::{PeriodContext, TeamEntry};
 
 /// this just starts the manager from the runtime :)
@@ -881,7 +881,7 @@ struct EngineSchema {}
 
 #[derive(Debug, Collection, Serialize, Deserialize, Clone)]
 #[collection(name = "picture")]
-enum PictureEntry {
+pub enum PictureEntry {
     Profile { thumb: RawPicture, full: RawPicture },
     ChallengePicture(RawPicture),
 }
@@ -1131,7 +1131,7 @@ impl PastGameEntry {
                     .teams
                     .iter()
                     .enumerate()
-                    .map(|(i, t)| {
+                    .flat_map(|(i, t)| {
                         t.periods
                             .iter()
                             .filter_map(|p| match p.context.clone() {
@@ -1181,7 +1181,6 @@ impl PastGameEntry {
                             })
                             .collect::<Vec<Event>>()
                     })
-                    .flatten()
                     .collect();
                 unsorted.sort();
                 unsorted
