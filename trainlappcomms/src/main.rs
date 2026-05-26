@@ -4,11 +4,16 @@ use libtruinlag::TeamRole;
 use libtruinlag::commands::{BroadcastAction, EngineAction, ResponseAction};
 use libtruinlag::{RawPicture, api};
 use std::error::Error;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, ReadHalf, WriteHalf};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
+use tokio_rustls::rustls::pki_types::pem::PemObject;
+use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use tokio_rustls::{TlsAcceptor, rustls};
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
+
+type EncryptedStream = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
 
 async fn get_everything(
     player_id: u64,
@@ -329,8 +334,9 @@ fn to_server_to_engine_command(
     }
 }
 
-async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
-    let (tcp_rx, tcp_tx) = stream.into_split();
+async fn handle_client(stream: TcpStream, acceptor: TlsAcceptor) -> Result<(), api::error::Error> {
+    let encrypted_stream = acceptor.accept(stream).await?;
+    let (tcp_rx, tcp_tx) = tokio::io::split(encrypted_stream);
     let mut transport_rx = FramedRead::new(tcp_rx, LengthDelimitedCodec::new());
     let mut transport_tx = FramedWrite::new(tcp_tx, LengthDelimitedCodec::new());
 
@@ -346,7 +352,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
 
     // the following 56 lines are ugly as all hell, please help me
     async fn login_successful(
-        tx: &mut FramedWrite<OwnedWriteHalf, LengthDelimitedCodec>,
+        tx: &mut FramedWrite<WriteHalf<EncryptedStream>, LengthDelimitedCodec>,
         value: bool,
     ) {
         tx.send(
@@ -412,7 +418,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
     };
 
     async fn app_receiver(
-        mut transport_rx: FramedRead<OwnedReadHalf, LengthDelimitedCodec>,
+        mut transport_rx: FramedRead<ReadHalf<EncryptedStream>, LengthDelimitedCodec>,
         truin_sender_tx: mpsc::UnboundedSender<EngineAction>,
         session: u64,
         team_id: usize,
@@ -475,7 +481,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
 
     async fn app_sender(
         mut internal_rx: mpsc::UnboundedReceiver<ToApp>,
-        mut transport_tx: FramedWrite<OwnedWriteHalf, LengthDelimitedCodec>,
+        mut transport_tx: FramedWrite<WriteHalf<EncryptedStream>, LengthDelimitedCodec>,
     ) -> Result<(), Box<dyn Error>> {
         loop {
             let message = internal_rx.recv().await.ok_or("fuck")?;
@@ -525,6 +531,14 @@ async fn handle_client(stream: TcpStream) -> Result<(), api::error::Error> {
 
 #[tokio::main()]
 async fn main() -> std::io::Result<()> {
+    let cert = CertificateDer::from_pem_file("cert.pem").unwrap();
+    let key = PrivateKeyDer::from_pem_file("cert.key.pem").unwrap();
+    let config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(vec![cert], key)
+        .unwrap();
+    let acceptor = tokio_rustls::TlsAcceptor::from(std::sync::Arc::new(config));
+
     tokio::spawn(receive_picture_connections());
     let listener = TcpListener::bind(if cfg!(debug_assertions) {
         "192.168.1.125:42314"
@@ -539,7 +553,7 @@ async fn main() -> std::io::Result<()> {
         match accepted {
             Ok((stream, addr)) => {
                 println!("A client connected from {}", addr);
-                tokio::spawn(handle_client(stream));
+                tokio::spawn(handle_client(stream, acceptor.clone()));
             }
             Err(e) => {
                 eprintln!("Connection failed: {}", e);

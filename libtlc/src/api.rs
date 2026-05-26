@@ -5,16 +5,19 @@ use bincode;
 use futures::{SinkExt, StreamExt};
 use std::io::{Error, ErrorKind};
 use tokio::{
-    io::AsyncWriteExt,
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+    io::{AsyncWriteExt, ReadHalf, WriteHalf},
+    net::TcpStream,
+};
+use tokio_rustls::rustls::{
+    self,
+    pki_types::{CertificateDer, pem::PemObject},
 };
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 
+type EncryptedStream = tokio_rustls::client::TlsStream<tokio::net::TcpStream>;
+
 pub struct TrainlappcommsSender {
-    sender: FramedWrite<OwnedWriteHalf, LengthDelimitedCodec>,
+    sender: FramedWrite<WriteHalf<EncryptedStream>, LengthDelimitedCodec>,
 }
 
 impl TrainlappcommsSender {
@@ -35,7 +38,7 @@ impl TrainlappcommsSender {
 }
 
 pub struct TrainlappcommsReceiver {
-    receiver: FramedRead<OwnedReadHalf, LengthDelimitedCodec>,
+    receiver: FramedRead<ReadHalf<EncryptedStream>, LengthDelimitedCodec>,
 }
 
 impl TrainlappcommsReceiver {
@@ -53,16 +56,36 @@ impl TrainlappcommsReceiver {
     }
 }
 
-pub async fn connect() -> Result<(TrainlappcommsReceiver, TrainlappcommsSender), Error> {
-    let (rx, tx) = TcpStream::connect(
-        if cfg!(debug_assertions) || option_env!("TL_DEBUG").is_some() {
-            "trainlag.ch:42314"
-        } else {
-            "trainlag.ch:41314"
-        },
-    )
-    .await?
-    .into_split();
+pub async fn connect(
+    root_pem: &[u8],
+) -> Result<(TrainlappcommsReceiver, TrainlappcommsSender), Error> {
+    // TLS setup
+    let root_cert = CertificateDer::from_pem_slice(root_pem).unwrap();
+    let mut root_cert_store = rustls::RootCertStore::empty();
+    root_cert_store.add(root_cert).unwrap();
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(std::sync::Arc::new(root_cert_store))
+        .with_no_client_auth();
+    let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
+    let domain = rustls::pki_types::ServerName::try_from("trainlag.ch")
+        .expect("invalid dns name. this is always the same so should never return an error...")
+        .to_owned();
+
+    let (rx, tx) = tokio::io::split(
+        connector
+            .connect(
+                domain,
+                TcpStream::connect(
+                    if cfg!(debug_assertions) || option_env!("TL_DEBUG").is_some() {
+                        "trainlag.ch:42314"
+                    } else {
+                        "trainlag.ch:41314"
+                    },
+                )
+                .await?,
+            )
+            .await?,
+    );
     Ok((
         TrainlappcommsReceiver {
             receiver: FramedRead::new(rx, LengthDelimitedCodec::new()),
