@@ -728,8 +728,19 @@ async fn main() {
                 &mut sender,
             )
             .await;
-            let session = sub_args.get_one::<u64>("Session").cloned();
-            run_command(EngineAction::SetPlayerSession { player, session }, sender).await
+            let session = sub_args.get_one::<String>("Session").cloned();
+            let session_id = match session {
+                None => None,
+                Some(session) => Some(get_session_by_name(&session, &mut sender).await),
+            };
+            run_command(
+                EngineAction::SetPlayerSession {
+                    player,
+                    session: session_id,
+                },
+                sender,
+            )
+            .await
         }
 
         "add_player" => {
