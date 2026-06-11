@@ -1,4 +1,4 @@
-use clap::{Arg, ArgAction, Command};
+use clap::{Arg, ArgAction, Command, value_parser};
 use clap_complete::{generate, shells::Zsh};
 use colored::Colorize;
 use libtruinlag::{
@@ -245,15 +245,31 @@ fn cli() -> Command {
             Command::new("set_start_time")
                 .about("Set the start time of future games")
                 .arg(Arg::new("Session").required(true))
-                .arg(Arg::new("Hours").required(true))
-                .arg(Arg::new("Minutes").required(true)),
+                .arg(
+                    Arg::new("Hours")
+                        .required(true)
+                        .value_parser(value_parser!(u32)),
+                )
+                .arg(
+                    Arg::new("Minutes")
+                        .required(true)
+                        .value_parser(value_parser!(u32)),
+                ),
         )
         .subcommand(
             Command::new("set_end_time")
                 .about("Set the end time of future games")
                 .arg(Arg::new("Session").required(true))
-                .arg(Arg::new("Hours").required(true))
-                .arg(Arg::new("Minutes").required(true)),
+                .arg(
+                    Arg::new("Hours")
+                        .required(true)
+                        .value_parser(value_parser!(u32)),
+                )
+                .arg(
+                    Arg::new("Minutes")
+                        .required(true)
+                        .value_parser(value_parser!(u32)),
+                ),
         )
         .subcommand(
             Command::new("set_start_zone")
