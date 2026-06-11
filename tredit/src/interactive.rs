@@ -40,6 +40,7 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
         "off_with_the_hinges",
         "physical",
         "base",
+        "sbb_employee",
     ];
 
     printnnl("fetching challenge sets...");
