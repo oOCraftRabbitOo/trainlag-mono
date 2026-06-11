@@ -208,7 +208,7 @@ fn cli() -> Command {
                 .about("Download, parse and import all challenges from the google sheet"),
         )
         .subcommand(
-            Command::new("delete_challenges")
+            Command::new("delete_challenges_and_zones")
                 .about("Delete all challenges from the truinlag DB")
                 .arg(
                     Arg::new("yes")
@@ -518,11 +518,11 @@ async fn main() {
 
         "get_challenges" => run_command(EngineAction::GetRawChallenges, sender).await,
 
-        "delete_challenges" => {
+        "delete_challenges_and_zones" => {
             if sub_args.contains_id("yes")
                 || interactive::get_input("Are you sure (yes/no) ").as_str() == "yes"
             {
-                run_command(EngineAction::DeleteAllChallenges, sender).await
+                run_command(EngineAction::DeleteAllChallengesAndZones, sender).await
             }
         }
 

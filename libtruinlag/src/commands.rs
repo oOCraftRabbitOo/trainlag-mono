@@ -123,7 +123,8 @@ pub enum EngineAction {
     },
     AddChallengeSet(String),
     GetChallengeSets,
-    DeleteAllChallenges,
+    /// Deltes all challenges *and zones*
+    DeleteAllChallengesAndZones,
     GetAllZones,
     AddZone {
         zone: u64,

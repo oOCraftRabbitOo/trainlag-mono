@@ -535,6 +535,7 @@ impl Engine {
         .into())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_zone(
         &mut self,
         zone: u64,
@@ -1021,7 +1022,7 @@ impl Engine {
             GetRawChallenges => Ok(self.get_raw_challenges()),
             SetRawChallenge(challenge) => self.set_raw_challenge(challenge),
             AddRawChallenge(challenge) => Ok(self.add_raw_challenge(challenge)),
-            DeleteAllChallenges => Ok(self.delete_all_challenges()),
+            DeleteAllChallengesAndZones => Ok(self.delete_all_challenges()),
             GetPlayerByPassphrase(passphrase) => Ok(self.get_player_by_passphrase(passphrase)),
             AddSession { name, mode } => Ok(self.add_session(name, mode)),
             AddPlayer {

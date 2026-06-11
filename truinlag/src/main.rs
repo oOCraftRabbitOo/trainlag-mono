@@ -992,6 +992,7 @@ impl ZoneEntry {
             train_through: self.train_through,
             mongus: self.mongus,
             s_bahn_zone: self.s_bahn_zone,
+            zoneable: self.zoneable,
             minutes_to: self.minutes_to.clone(),
             close_sectors: {
                 let mut sectors = Vec::new();

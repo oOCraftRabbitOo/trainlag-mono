@@ -269,7 +269,7 @@ impl SendConnection {
     }
 
     pub async fn delete_all_challenges(&mut self) -> Result<()> {
-        match self.send(EngineAction::DeleteAllChallenges).await? {
+        match self.send(EngineAction::DeleteAllChallengesAndZones).await? {
             ResponseAction::Success => Ok(()),
             ResponseAction::Error(err) => Err(Error::Truinlag(err)),
             other => Err(Error::InvalidSignal(format!("{:?}", other))),
