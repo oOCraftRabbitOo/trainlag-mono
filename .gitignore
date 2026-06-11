@@ -13,4 +13,7 @@
 # Contains mutation testing data
 **/mutants.out*/
 
+# certificates and keys that should never reach a repo
+**/*.pem
+
 truinlag/truintabase
