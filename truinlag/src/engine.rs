@@ -612,6 +612,7 @@ impl Engine {
 
     fn delete_all_challenges(&mut self) -> InternEngineResponsePackage {
         self.challenges.delete_all();
+        self.zones.delete_all();
         Success.into()
     }
 
