@@ -132,6 +132,7 @@ pub enum EngineAction {
         train_through: bool,
         mongus: bool,
         s_bahn_zone: bool,
+        zoneable: bool,
     },
     AddMinutesTo {
         from_zone: u64,

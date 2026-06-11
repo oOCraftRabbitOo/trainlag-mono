@@ -543,6 +543,7 @@ impl Engine {
         train_through: bool,
         mongus: bool,
         s_bahn_zone: bool,
+        zoneable: bool,
     ) -> InternEngineResponsePackage {
         self.zones.add(ZoneEntry {
             zone,
@@ -553,6 +554,7 @@ impl Engine {
             s_bahn_zone,
             minutes_to: HashMap::new(),
             sectors: Vec::new(),
+            zoneable,
         });
         Success.into()
     }
@@ -1001,6 +1003,7 @@ impl Engine {
                 train_through,
                 mongus,
                 s_bahn_zone,
+                zoneable,
             } => Ok(self.add_zone(
                 zone,
                 num_conn_zones,
@@ -1008,6 +1011,7 @@ impl Engine {
                 train_through,
                 mongus,
                 s_bahn_zone,
+                zoneable,
             )),
             AddMinutesTo {
                 from_zone,
