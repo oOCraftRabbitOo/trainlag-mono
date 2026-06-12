@@ -194,7 +194,11 @@ fn cli() -> Command {
                 .arg(Arg::new("Team").required(true))
                 .arg(Arg::new("Title").required(true))
                 .arg(Arg::new("Description").required(true))
-                .arg(Arg::new("Points").required(true)),
+                .arg(
+                    Arg::new("Points")
+                        .required(true)
+                        .value_parser(value_parser!(u64)),
+                ),
         )
         .subcommand(
             Command::new("rename_team")
@@ -275,13 +279,21 @@ fn cli() -> Command {
             Command::new("set_start_zone")
                 .about("Set the start zone of future games")
                 .arg(Arg::new("Session").required(true))
-                .arg(Arg::new("Zone").required(true)),
+                .arg(
+                    Arg::new("Zone")
+                        .required(true)
+                        .value_parser(value_parser!(u64)),
+                ),
         )
         .subcommand(
             Command::new("set_num_catchers")
                 .about("Set the number of hunters in future games")
                 .arg(Arg::new("Session").required(true))
-                .arg(Arg::new("Number of hunters").required(true)),
+                .arg(
+                    Arg::new("Number of hunters")
+                        .required(true)
+                        .value_parser(value_parser!(u64)),
+                ),
         )
         .subcommand(
             Command::new("set_challenge_sets")
@@ -290,6 +302,7 @@ fn cli() -> Command {
                 .arg(
                     Arg::new("Challenge Set ID")
                         .action(ArgAction::Append)
+                        .value_parser(value_parser!(u64))
                         .required(true),
                 ),
         )
