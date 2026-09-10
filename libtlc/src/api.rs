@@ -60,9 +60,9 @@ pub async fn connect(
     root_pem: &[u8],
 ) -> Result<(TrainlappcommsReceiver, TrainlappcommsSender), Error> {
     // TLS setup
-    let root_cert = CertificateDer::from_pem_slice(root_pem).unwrap();
+    let root_cert = CertificateDer::from_pem_slice(root_pem).map_err(Error::other)?;
     let mut root_cert_store = rustls::RootCertStore::empty();
-    root_cert_store.add(root_cert).unwrap();
+    root_cert_store.add(root_cert).map_err(Error::other)?;
     let config = rustls::ClientConfig::builder()
         .with_root_certificates(std::sync::Arc::new(root_cert_store))
         .with_no_client_auth();

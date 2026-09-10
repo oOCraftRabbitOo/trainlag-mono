@@ -10,7 +10,7 @@ use chrono::{self, Duration as Dur, Timelike};
 use geo::Distance;
 use libtruinlag::{commands::Error, *};
 use log::{error, trace, warn};
-use rand::{prelude::*, rng};
+use rand::{prelude::*, random_range, rng};
 use serde::{Deserialize, Serialize};
 
 /// The representation of a team in a running or future game in the db
@@ -1038,4 +1038,19 @@ fn lerp(start: u64, end: u64, t: f64) -> u64 {
 /// It lerps
 fn flerp(start: f64, end: f64, t: f64) -> f64 {
     start + (end - start) * t
+}
+
+fn filter_choose<T, P>(items: &mut [T], predicate: P) -> Option<&T>
+where
+    P: Fn(&T) -> bool,
+{
+    let len = items.len();
+    for i in 0..len {
+        let target = random_range(i..len);
+        if predicate(&items[target]) {
+            return Some(&items[target]);
+        }
+        items.swap(i, target);
+    }
+    None
 }
