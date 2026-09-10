@@ -416,6 +416,7 @@ pub struct Zone {
     pub train_through: bool,
     pub mongus: bool,
     pub s_bahn_zone: bool,
+    pub zoneable: bool,
     pub minutes_to: std::collections::HashMap<u64, u64>,
     pub close_sectors: Vec<Sector>,
     pub id: u64,

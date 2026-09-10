@@ -1,4 +1,4 @@
-use clap::{Arg, ArgAction, Command};
+use clap::{Arg, ArgAction, Command, value_parser};
 use clap_complete::{generate, shells::Zsh};
 use colored::Colorize;
 use libtruinlag::{
@@ -194,7 +194,11 @@ fn cli() -> Command {
                 .arg(Arg::new("Team").required(true))
                 .arg(Arg::new("Title").required(true))
                 .arg(Arg::new("Description").required(true))
-                .arg(Arg::new("Points").required(true)),
+                .arg(
+                    Arg::new("Points")
+                        .required(true)
+                        .value_parser(value_parser!(u64)),
+                ),
         )
         .subcommand(
             Command::new("rename_team")
@@ -208,7 +212,7 @@ fn cli() -> Command {
                 .about("Download, parse and import all challenges from the google sheet"),
         )
         .subcommand(
-            Command::new("delete_challenges")
+            Command::new("delete_challenges_and_zones")
                 .about("Delete all challenges from the truinlag DB")
                 .arg(
                     Arg::new("yes")
@@ -245,27 +249,51 @@ fn cli() -> Command {
             Command::new("set_start_time")
                 .about("Set the start time of future games")
                 .arg(Arg::new("Session").required(true))
-                .arg(Arg::new("Hours").required(true))
-                .arg(Arg::new("Minutes").required(true)),
+                .arg(
+                    Arg::new("Hours")
+                        .required(true)
+                        .value_parser(value_parser!(u32)),
+                )
+                .arg(
+                    Arg::new("Minutes")
+                        .required(true)
+                        .value_parser(value_parser!(u32)),
+                ),
         )
         .subcommand(
             Command::new("set_end_time")
                 .about("Set the end time of future games")
                 .arg(Arg::new("Session").required(true))
-                .arg(Arg::new("Hours").required(true))
-                .arg(Arg::new("Minutes").required(true)),
+                .arg(
+                    Arg::new("Hours")
+                        .required(true)
+                        .value_parser(value_parser!(u32)),
+                )
+                .arg(
+                    Arg::new("Minutes")
+                        .required(true)
+                        .value_parser(value_parser!(u32)),
+                ),
         )
         .subcommand(
             Command::new("set_start_zone")
                 .about("Set the start zone of future games")
                 .arg(Arg::new("Session").required(true))
-                .arg(Arg::new("Zone").required(true)),
+                .arg(
+                    Arg::new("Zone")
+                        .required(true)
+                        .value_parser(value_parser!(u64)),
+                ),
         )
         .subcommand(
             Command::new("set_num_catchers")
                 .about("Set the number of hunters in future games")
                 .arg(Arg::new("Session").required(true))
-                .arg(Arg::new("Number of hunters").required(true)),
+                .arg(
+                    Arg::new("Number of hunters")
+                        .required(true)
+                        .value_parser(value_parser!(u64)),
+                ),
         )
         .subcommand(
             Command::new("set_challenge_sets")
@@ -274,6 +302,7 @@ fn cli() -> Command {
                 .arg(
                     Arg::new("Challenge Set ID")
                         .action(ArgAction::Append)
+                        .value_parser(value_parser!(u64))
                         .required(true),
                 ),
         )
@@ -518,11 +547,11 @@ async fn main() {
 
         "get_challenges" => run_command(EngineAction::GetRawChallenges, sender).await,
 
-        "delete_challenges" => {
+        "delete_challenges_and_zones" => {
             if sub_args.contains_id("yes")
                 || interactive::get_input("Are you sure (yes/no) ").as_str() == "yes"
             {
-                run_command(EngineAction::DeleteAllChallenges, sender).await
+                run_command(EngineAction::DeleteAllChallengesAndZones, sender).await
             }
         }
 

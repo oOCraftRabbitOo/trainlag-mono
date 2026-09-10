@@ -535,6 +535,7 @@ impl Engine {
         .into())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_zone(
         &mut self,
         zone: u64,
@@ -543,6 +544,7 @@ impl Engine {
         train_through: bool,
         mongus: bool,
         s_bahn_zone: bool,
+        zoneable: bool,
     ) -> InternEngineResponsePackage {
         self.zones.add(ZoneEntry {
             zone,
@@ -553,6 +555,7 @@ impl Engine {
             s_bahn_zone,
             minutes_to: HashMap::new(),
             sectors: Vec::new(),
+            zoneable,
         });
         Success.into()
     }
@@ -609,6 +612,7 @@ impl Engine {
 
     fn delete_all_challenges(&mut self) -> InternEngineResponsePackage {
         self.challenges.delete_all();
+        self.zones.delete_all();
         Success.into()
     }
 
@@ -1043,6 +1047,7 @@ impl Engine {
                 train_through,
                 mongus,
                 s_bahn_zone,
+                zoneable,
             } => Ok(self.add_zone(
                 zone,
                 num_conn_zones,
@@ -1050,6 +1055,7 @@ impl Engine {
                 train_through,
                 mongus,
                 s_bahn_zone,
+                zoneable,
             )),
             AddMinutesTo {
                 from_zone,
@@ -1059,7 +1065,7 @@ impl Engine {
             GetRawChallenges => Ok(self.get_raw_challenges()),
             SetRawChallenge(challenge) => self.set_raw_challenge(challenge),
             AddRawChallenge(challenge) => Ok(self.add_raw_challenge(challenge)),
-            DeleteAllChallenges => Ok(self.delete_all_challenges()),
+            DeleteAllChallengesAndZones => Ok(self.delete_all_challenges()),
             GetPlayerByPassphrase(passphrase) => Ok(self.get_player_by_passphrase(passphrase)),
             AddSession { name, mode } => Ok(self.add_session(name, mode)),
             AddPlayer {

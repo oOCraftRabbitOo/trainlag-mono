@@ -184,6 +184,7 @@ impl ChallengeEntry {
         zone_zoneables: bool,
         centre_zone: DBEntry<ZoneEntry>,
         current_zone: DBEntry<ZoneEntry>,
+        // These zones may include zones that are not zoneable. This function will sort them out.
         allowed_zones: Option<Vec<u64>>,
         id: u64,
         points_to_top: Option<u64>,
@@ -208,27 +209,27 @@ impl ChallengeEntry {
             || matches!(self.kind, Ortsspezifisch | Kaff | ZKaff)
             || (matches!(self.kind, Zoneable) && zone_zoneables);
         let zone = match self.random_place {
-            Some(place_type) => match place_type {
-                RandomPlaceType::Zone => zone_db
+            Some(place_type) => {
+                let all_zones = zone_db
                     .get_all()
-                    .iter()
-                    .filter(|z| match &allowed_zones {
-                        None => true,
-                        Some(allowed) => allowed.contains(&z.id),
-                    })
-                    .choose(&mut rng())
-                    .cloned(),
-                RandomPlaceType::SBahnZone => zone_db
-                    .get_all()
-                    .iter()
-                    .filter(|z| z.contents.s_bahn_zone)
-                    .filter(|z| match &allowed_zones {
-                        None => true,
-                        Some(allowed) => allowed.contains(&z.id),
-                    })
-                    .choose(&mut rng())
-                    .cloned(),
-            },
+                    .into_iter()
+                    .filter(|z| z.contents.zoneable);
+                match place_type {
+                    RandomPlaceType::Zone => all_zones
+                        .filter(|z| match &allowed_zones {
+                            None => true,
+                            Some(allowed) => allowed.contains(&z.id),
+                        })
+                        .choose(&mut rng()),
+                    RandomPlaceType::SBahnZone => all_zones
+                        .filter(|z| z.contents.s_bahn_zone)
+                        .filter(|z| match &allowed_zones {
+                            None => true,
+                            Some(allowed) => allowed.contains(&z.id),
+                        })
+                        .choose(&mut rng()),
+                }
+            }
             None => match self.kind {
                 Kaff => match self.zone.first() {
                     Some(id) => zone_db.get(*id).ok(),
@@ -249,13 +250,13 @@ impl ChallengeEntry {
                     if zone_zoneables {
                         zone_db
                             .get_all()
-                            .iter()
+                            .into_iter()
+                            .filter(|z| z.contents.zoneable)
                             .filter(|z| match &allowed_zones {
                                 None => true,
                                 Some(allowed) => allowed.contains(&z.id),
                             })
                             .choose(&mut rng())
-                            .cloned()
                     } else {
                         None
                     }

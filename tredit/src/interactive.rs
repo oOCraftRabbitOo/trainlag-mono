@@ -40,6 +40,7 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
         "off_with_the_hinges",
         "physical",
         "base",
+        "sbb_employee",
     ];
 
     printnnl("fetching challenge sets...");
@@ -104,6 +105,12 @@ pub async fn import_challenges(mut sender: libtruinlag::api::SendConnection) {
                     .unwrap(),
                 s_bahn_zone: s_bahn_zones
                     .contains(&sheet_zone.get("Zone").unwrap().parse::<i64>().unwrap()),
+                zoneable: sheet_zone
+                    .get("zoneable")
+                    .unwrap()
+                    .to_lowercase()
+                    .parse()
+                    .unwrap(),
             })
             .await
             .unwrap();

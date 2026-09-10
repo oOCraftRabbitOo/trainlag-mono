@@ -946,6 +946,10 @@ impl PlayerEntry {
     }
 }
 
+fn false_fn() -> bool {
+    false
+}
+
 /// The representation of a zone in the db
 #[derive(Debug, Clone, Collection, Serialize, Deserialize)]
 #[collection(name = "zone")]
@@ -970,6 +974,9 @@ pub struct ZoneEntry {
     /// but a zone, only challenges in close sectors will be generated.
     #[serde(default)]
     pub sectors: Vec<u64>,
+    /// Whether zoneable challenges can be generated with this zone
+    #[serde(default = "false_fn")]
+    pub zoneable: bool,
 }
 
 impl ZoneEntry {
@@ -986,6 +993,7 @@ impl ZoneEntry {
             train_through: self.train_through,
             mongus: self.mongus,
             s_bahn_zone: self.s_bahn_zone,
+            zoneable: self.zoneable,
             minutes_to: self.minutes_to.clone(),
             close_sectors: {
                 let mut sectors = Vec::new();
