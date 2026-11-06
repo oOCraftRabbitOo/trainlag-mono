@@ -354,7 +354,7 @@ async fn main() {
         "get_sectors" => run_command(EngineAction::GetSectors, sender).await,
 
         "rename_player" => {
-            let player_id = get_session_by_name(
+            let player_id = get_player_by_name(
                 sub_args.get_one::<String>("Player").expect("required"),
                 &mut sender,
             )
