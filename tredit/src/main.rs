@@ -323,6 +323,11 @@ fn cli() -> Command {
                 .arg(Arg::new("Name").required(true)),
         )
         .subcommand(Command::new("get_sectors").about("Get all sectors"))
+        .subcommand(
+            Command::new("set_session_for_all_players")
+                .about("Change the session of all players in all teams of the selected session to that session")
+                .arg(Arg::new("Session").required(true))
+        )
 }
 
 #[tokio::main]
@@ -351,6 +356,43 @@ async fn main() {
     let (mut sender, _recvr) = connect(Some(&address)).await.unwrap();
 
     match name.as_str() {
+        "set_session_for_all_players" => {
+            let session_id = get_session_by_name(
+                sub_args.get_one::<String>("Session").expect("required"),
+                &mut sender,
+            )
+            .await;
+            let teams = match sender
+                .send(EngineAction::GetState(Some(session_id)))
+                .await
+                .unwrap()
+            {
+                libtruinlag::commands::ResponseAction::SendState {
+                    teams,
+                    events,
+                    game,
+                } => teams,
+                other => panic!(
+                    "received unexpected response when fetching teams: {:?}",
+                    other
+                ),
+            };
+            let players_ids = teams
+                .iter()
+                .flat_map(|t| t.players.iter().map(|p| p.id).collect())
+                .collect();
+            for id in players_ids {
+                sender
+                    .send(EngineAction::SetPlayerSession {
+                        player: id,
+                        session: Some(session_id),
+                    })
+                    .await
+                    .unwrap();
+            }
+            eprintln!("{}", "Command executed successfully.".green().bold())
+        }
+
         "get_sectors" => run_command(EngineAction::GetSectors, sender).await,
 
         "rename_player" => {
@@ -799,5 +841,5 @@ async fn main() {
         }
 
         _ => unreachable!(),
-    }
+    }; // semicolon prevents weird lsp stuff here
 }
