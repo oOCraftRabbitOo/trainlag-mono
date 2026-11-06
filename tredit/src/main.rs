@@ -377,7 +377,7 @@ async fn main() {
                     other
                 ),
             };
-            let players_ids = teams
+            let players_ids: Vec<u64> = teams
                 .iter()
                 .flat_map(|t| t.players.iter().map(|p| p.id).collect::<Vec<_>>())
                 .collect();
