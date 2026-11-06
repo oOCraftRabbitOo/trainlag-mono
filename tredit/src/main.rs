@@ -379,7 +379,7 @@ async fn main() {
             };
             let players_ids = teams
                 .iter()
-                .flat_map(|t| t.players.iter().map(|p| p.id).collect())
+                .flat_map(|t| t.players.iter().map(|p| p.id).collect::<Vec<_>>())
                 .collect();
             for id in players_ids {
                 sender
