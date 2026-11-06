@@ -1237,7 +1237,7 @@ impl Engine {
                 team_id,
             } => {
                 let session = self.sessions.get_mut(session_id)?;
-                Ok(session.contents.remove_team(team_id))
+                session.contents.remove_team(team_id)
             }
         }
     }

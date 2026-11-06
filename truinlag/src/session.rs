@@ -914,8 +914,12 @@ impl Session {
         Success.into()
     }
 
-    pub fn remove_team(&mut self, team_id: usize) -> InternEngineResponsePackage {
-        self.teams.remove(team_id);
-        Success.into()
+    pub fn remove_team(&mut self, team_id: usize) -> InternEngineResponseResult {
+        if team_id < self.teams.len() {
+            self.teams.remove(team_id);
+            Ok(Success.into())
+        } else {
+            Err(NotFound(format!("Team with id {}", team_id)))
+        }
     }
 }
