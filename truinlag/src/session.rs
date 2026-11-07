@@ -151,6 +151,8 @@ impl Session {
                     team.challenges.push(InOpenChallenge {
                         title: challenge.title,
                         description: challenge.description,
+                        translated_titles: challenge.translated_titles,
+                        translated_descriptions: challenge.translated_descriptions,
                         points: challenge.points,
                         action: None,
                         zone: None,
@@ -711,6 +713,8 @@ impl Session {
                     PeriodContext::CompletedChallenge {
                         title,
                         description,
+                        translated_titles,
+                        translated_descriptions,
                         zone: _,
                         points,
                         id,
@@ -719,6 +723,8 @@ impl Session {
                         challenge: Challenge {
                             title: title.clone(),
                             description: description.clone(),
+                            translated_titles: translated_titles.clone(),
+                            translated_descriptions: translated_descriptions.clone(),
                             points: *points,
                             id: *id,
                         },

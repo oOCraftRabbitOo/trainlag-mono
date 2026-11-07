@@ -648,6 +648,8 @@ async fn main() {
                         title,
                         description,
                         points,
+                        translated_titles: std::collections::HashMap::new(),
+                        translated_descriptions: std::collections::HashMap::new(),
                         id: 0,
                     },
                 },

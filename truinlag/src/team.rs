@@ -76,8 +76,10 @@ pub enum PeriodContext {
     CompletedChallenge {
         title: String,       // the title of the completed challenge
         description: String, // the description of the completed challenge
-        zone: Option<u64>,   // the zone of the completed challenge
-        points: u64,         // the points earned by completing the challenge
+        translated_titles: HashMap<String, String>,
+        translated_descriptions: HashMap<String, String>,
+        zone: Option<u64>, // the zone of the completed challenge
+        points: u64,       // the points earned by completing the challenge
         id: u64,
         #[serde(default)]
         not_completed: Vec<Challenge>,
@@ -168,6 +170,8 @@ impl TeamEntry {
                     PeriodContext::CompletedChallenge {
                         title,
                         description,
+                        translated_titles,
+                        translated_descriptions,
                         points,
                         id,
                         zone: _,
@@ -175,6 +179,8 @@ impl TeamEntry {
                     } => Some(CompletedChallenge {
                         title: title.clone(),
                         description: description.clone(),
+                        translated_titles: translated_titles.clone(),
+                        translated_descriptions: translated_descriptions.clone(),
                         points: *points,
                         time: p.end_time.num_seconds_from_midnight(),
                         picture_ids: p.pictures.clone(),
@@ -271,6 +277,8 @@ impl TeamEntry {
                 PeriodContext::CompletedChallenge {
                     title,
                     description,
+                    translated_titles,
+                    translated_descriptions,
                     zone: _,
                     points,
                     id,
@@ -279,6 +287,8 @@ impl TeamEntry {
                     ret.push(Challenge {
                         title: title.clone(),
                         description: description.clone(),
+                        translated_titles: translated_titles.clone(),
+                        translated_descriptions: translated_descriptions.clone(),
                         points: *points,
                         id: *id,
                     });
@@ -444,6 +454,8 @@ impl TeamEntry {
                     PeriodContext::CompletedChallenge {
                         title: _,
                         description: _,
+                        translated_titles: _,
+                        translated_descriptions: _,
                         zone: _,
                         points: _,
                         not_completed: _,
@@ -955,6 +967,8 @@ impl TeamEntry {
                 self.new_period(PeriodContext::CompletedChallenge {
                     title: completed.title.clone(),
                     description: completed.description.clone(),
+                    translated_titles: completed.translated_titles.clone(),
+                    translated_descriptions: completed.translated_descriptions.clone(),
                     zone: completed.zone,
                     points: completed.points,
                     id: completed.id,

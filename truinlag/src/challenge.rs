@@ -8,7 +8,7 @@ use bonsaidb::core::{
 };
 use chrono::Datelike;
 use libtruinlag::*;
-use log::{error, trace};
+use log::{error, trace, warn};
 use rand::prelude::*;
 use rand::rng;
 use rand_distr::{Distribution, Normal};
@@ -394,28 +394,172 @@ impl ChallengeEntry {
 
         // generating title and description. These may be automatically generated based on the
         // place name.
-        let mut title = config.default_challenge_title.clone();
-        let mut description = config.default_challenge_description.clone();
-        if let Some(place_name) = self.place.clone() {
-            match self.kind {
-                ZKaff => {
-                    title = format!("Züridrift nach {place_name}");
-                    description = format!("Gönd zu de Station {place_name} in Züri.");
-                }
-                _ => {
-                    title = format!("Usflug uf {place_name}");
-                    description = format!("Gönd nach {place_name}.");
+        type Map = HashMap<String, String>;
+        // Helper functions to make the match expressions below more readable.
+        // They are closures so that they can capture values.
+        let translation_insert = |context: &str, vals: Vec<(&str, String)>| -> Map {
+            let mut map = HashMap::new();
+            for (key, value) in vals {
+                if let Some(_) = map.insert(key.into(), value) {
+                    // prints error if key is already present, i.e. there's a translation but no
+                    // original title override
+                    error!(
+                        "Wrong translation in challenge {} ({}),\
+                        translated {} {} exists, but {} does not.",
+                        id,
+                        self.place
+                            .clone()
+                            .or(self.title.clone())
+                            .unwrap_or("invalid".into()),
+                        key.clone(),
+                        context,
+                        context
+                    )
                 }
             }
+            map
+        };
+        let insert_zkaff_title_translations = |place_name: String| -> Map {
+            translation_insert(
+                "title",
+                vec![
+                    ("de_ch", format!("Zürichdrift nach {place_name}")),
+                    ("en_uk", format!("Zurich Drift to {place_name}")),
+                    ("fr_ch", format!("Drift zurichois vers {place_name}")),
+                ],
+            )
+        };
+        let insert_kaff_title_translations = |place_name: String| -> Map {
+            translation_insert(
+                "title",
+                vec![
+                    ("de_ch", format!("Ausflug nach {place_name}")),
+                    ("en_uk", format!("Trip to {place_name}")),
+                    ("fr_ch", format!("Excursion à {place_name}")),
+                ],
+            )
+        };
+        let insert_zkaff_desc_translations = |place_name: String| -> Map {
+            translation_insert(
+                "description",
+                vec![
+                    ("de_ch", format!("Geht zur Station {place_name} in Zürich.")),
+                    ("en_uk", format!("Go to the stop {place_name} in Zürich.")),
+                    ("fr_ch", format!("Allez à l'arrêt {place_name} à Zurich.")),
+                ],
+            )
+        };
+        let insert_kaff_desc_translations = |place_name: String| -> Map {
+            translation_insert(
+                "description",
+                vec![
+                    ("de_ch", format!("Geht nach {place_name}.")),
+                    ("en_uk", format!("Go to {place_name}.")),
+                    ("fr_ch", format!("Allez à {place_name}.")),
+                ],
+            )
+        };
+        fn merge_maps(low_prio: Map, high_prio: Map) -> Map {
+            low_prio.into_iter().chain(high_prio).collect()
         }
-        if let Some(title_override) = self.title.clone() {
-            title = title_override;
-        }
-        if let Some(desc_override) = self.description.clone() {
-            description = desc_override;
-        }
+        // Generate title and description based on challenge kind, override and place name.
+        // The logic for title and description are subtly different.
+        let (mut title, mut translated_titles) =
+            match (self.title.clone(), self.kind, self.place.clone()) {
+                (Some(title_override), Kaff, Some(place_name)) => (
+                    title_override,
+                    merge_maps(
+                        insert_kaff_title_translations(place_name),
+                        self.translated_titles.clone(),
+                    ),
+                ),
+                (Some(title_override), ZKaff, Some(place_name)) => (
+                    title_override,
+                    merge_maps(
+                        insert_zkaff_title_translations(place_name),
+                        self.translated_titles.clone(),
+                    ),
+                ),
+                (None, ZKaff, Some(place_name)) => (
+                    format!("Züridrift nach {place_name}"),
+                    insert_zkaff_title_translations(place_name),
+                ),
+                (None, Kaff, Some(place_name)) => (
+                    format!("Usflug uf {place_name}"),
+                    insert_kaff_title_translations(place_name),
+                ),
+                (Some(title_override), _, None) => (title_override, self.translated_titles.clone()),
+                (Some(title_override), _, Some(_)) => {
+                    warn!(
+                        "Challenge {} ({}) has a place name, but is not kaff or zkaff",
+                        id, title_override
+                    );
+                    (title_override, self.translated_titles.clone())
+                }
+                (None, _, Some(place)) => {
+                    error!(
+                        "Challenge {} (place: {}) has no title and is \
+                    not kaff or zkaff, using kaff-like title",
+                        id, place
+                    );
+                    (
+                        format!("Usflug uf {place}"),
+                        insert_kaff_title_translations(place),
+                    )
+                }
+                (None, _, None) => {
+                    error!(
+                        "Challenge {} has no title and no place, using default title",
+                        id
+                    );
+                    (config.default_challenge_title.clone(), HashMap::new())
+                }
+            };
+        let (mut description, mut translated_descriptions) =
+            match (self.description.clone(), self.kind, self.place.clone()) {
+                (Some(desc), Kaff, Some(_)) | (Some(desc), ZKaff, Some(_)) => {
+                    (desc, self.translated_descriptions.clone())
+                }
+                (None, ZKaff, Some(place_name)) => (
+                    format!("Gönd zu de Station {place_name} in Züri."),
+                    insert_zkaff_desc_translations(place_name),
+                ),
+                (None, Kaff, Some(place_name)) => (
+                    format!("Gönd nach {place_name}."),
+                    insert_kaff_desc_translations(place_name),
+                ),
+                (Some(desc), _, None) => (desc, self.translated_descriptions.clone()),
+                (Some(desc), _, Some(_)) => {
+                    warn!(
+                        "Challenge {} ({}) has a place name, but is not kaff or zkaff",
+                        id, desc
+                    );
+                    (desc, self.translated_descriptions.clone())
+                }
+                (None, _, Some(place_name)) => {
+                    error!(
+                        "Challenge {} (place: {}) has no description and is \
+                    not kaff or zkaff, using kaff-like description",
+                        id, place_name
+                    );
+                    (
+                        format!("Züridrift nach {place_name}"),
+                        insert_zkaff_desc_translations(place_name),
+                    )
+                }
+                (None, _, None) => {
+                    error!(
+                        "Challenge {} has no description and no place, using default description",
+                        id
+                    );
+                    (config.default_challenge_description.clone(), HashMap::new())
+                }
+            };
         if self.no_disembark {
             title = format!("🛤️ {}", title);
+            for val in translated_titles.values_mut() {
+                *val = format!("🛤️ {}", val);
+            }
         }
         if let Some(z) = &zone {
             if matches!(self.kind, Zoneable) && zone_zoneables {
@@ -426,14 +570,55 @@ impl ChallengeEntry {
                     )
                     .as_str(),
                 );
+                if let Some(val) = translated_descriptions.get_mut("de_ch") {
+                    val.push_str(
+                        format!(
+                            " ⚠️ Damit ihr Punkte kriegt, macht das in der Zone {}.",
+                            z.contents.zone
+                        )
+                        .as_str(),
+                    );
+                }
+                if let Some(val) = translated_descriptions.get_mut("en_gb") {
+                    val.push_str(
+                        format!(
+                            " ⚠️ For you to receive points, do that in the transit zone {}.",
+                            z.contents.zone
+                        )
+                        .as_str(),
+                    );
+                }
+                if let Some(val) = translated_descriptions.get_mut("fr_ch") {
+                    val.push_str(
+                        format!(
+                            " ⚠️ Pour gagner des points, faites ça dans la zone {}.",
+                            z.contents.zone
+                        )
+                        .as_str(),
+                    );
+                }
             }
             title = title.replace("%z", format!("{}", z.contents.zone).as_str());
-            description = description.replace("%z", format!("{}", z.contents.zone).as_str());
             title = title.replace("%s", format!("{}", z.contents.zone).as_str());
+            for val in translated_titles.values_mut() {
+                val.replace("%z", format!("{}", z.contents.zone).as_str());
+                val.replace("%s", format!("{}", z.contents.zone).as_str());
+            }
+            description = description.replace("%z", format!("{}", z.contents.zone).as_str());
             description = description.replace("%s", format!("{}", z.contents.zone).as_str());
+            for val in translated_descriptions.values_mut() {
+                val.replace("%z", format!("{}", z.contents.zone).as_str());
+                val.replace("%s", format!("{}", z.contents.zone).as_str());
+            }
         }
         title = title.replace("%r", format!("{}", reps).as_str());
+        for val in translated_titles.values_mut() {
+            val.replace("%r", format!("{}", reps).as_str());
+        }
         description = description.replace("%r", format!("{}", reps).as_str());
+        for val in translated_descriptions.values_mut() {
+            val.replace("%r", format!("{}", reps).as_str());
+        }
 
         // generating challenge action
         let mut action = None;
@@ -463,6 +648,8 @@ impl ChallengeEntry {
             action,
             zone: zone.map(|z| z.id),
             sector: self.sector.first().cloned(), // just take the first, don't see better option rn
+            translated_titles,
+            translated_descriptions,
             id,
         }
     }
@@ -599,6 +786,8 @@ pub struct InOpenChallenge {
     pub id: u64,
     pub title: String,
     pub description: String,
+    pub translated_titles: std::collections::HashMap<String, String>,
+    pub translated_descriptions: std::collections::HashMap<String, String>,
     pub points: u64,
     pub action: Option<ChallengeAction>,
     pub zone: Option<u64>, // id for ZoneEntry collection in db
@@ -627,6 +816,8 @@ impl InOpenChallenge {
             title: self.title.clone(),
             points: self.points,
             description: self.description.clone(),
+            translated_titles: self.translated_titles.clone(),
+            translated_descriptions: self.translated_descriptions.clone(),
             id: self.id,
         }
     }

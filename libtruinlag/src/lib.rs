@@ -1,7 +1,7 @@
 use image::{DynamicImage, ImageFormat};
 use partially::Partial;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -459,6 +459,8 @@ pub struct Player {
 pub struct Challenge {
     pub title: String,
     pub description: String,
+    pub translated_titles: HashMap<String, String>,
+    pub translated_descriptions: HashMap<String, String>,
     pub points: u64,
     pub id: u64,
 }
@@ -467,6 +469,8 @@ pub struct Challenge {
 pub struct CompletedChallenge {
     pub title: String,
     pub description: String,
+    pub translated_titles: HashMap<String, String>,
+    pub translated_descriptions: HashMap<String, String>,
     pub points: u64,
     pub time: DayTimestamp,
     pub picture_ids: Vec<u64>,
