@@ -294,26 +294,6 @@ impl ChallengeEntry {
         let reps = self.repetitions.clone().choose(&mut rng()).unwrap_or(0);
         points += reps as i64 * self.points_per_rep as i64;
         trace!("adding repetition points => {points}");
-        // zone / distance points
-        if let Some(z) = &zone {
-            points += z.contents.zonic_kaffness(config) as i64;
-            trace!("adding zonic kaffness => {points}");
-            points += (config.travel_minutes_multiplier
-                * ((*current_zone
-                    .contents
-                    .minutes_to
-                    .get(&z.id)
-                    .unwrap_or_else(|| {
-                        error!(
-                            "Engine: Zone {} has no distance to zone {}, \
-                            skipping distance calculation",
-                            current_zone.id, z.id
-                        );
-                        &0
-                    }) as f32)
-                    .powf(config.travel_minutes_exponent))) as i64;
-            trace!("adding travel time => {points}");
-        }
         // zkaff / zoneable points
         match (self.kind, zone_zoneables) {
             (ZKaff, _) => {
@@ -342,6 +322,26 @@ impl ChallengeEntry {
             chrono::Weekday::Sat => points = (points as f32 * self.bias_sat) as i64,
             chrono::Weekday::Sun => points = (points as f32 * self.bias_sun) as i64,
             _ => (),
+        }
+        // zone / distance points
+        if let Some(z) = &zone {
+            points += z.contents.zonic_kaffness(config) as i64;
+            trace!("adding zonic kaffness => {points}");
+            points += (config.travel_minutes_multiplier
+                * ((*current_zone
+                    .contents
+                    .minutes_to
+                    .get(&z.id)
+                    .unwrap_or_else(|| {
+                        error!(
+                            "Engine: Zone {} has no distance to zone {}, \
+                            skipping distance calculation",
+                            current_zone.id, z.id
+                        );
+                        &0
+                    }) as f32)
+                    .powf(config.travel_minutes_exponent))) as i64;
+            trace!("adding travel time => {points}");
         }
         trace!("adding points bias => {points}");
         // underdog points
