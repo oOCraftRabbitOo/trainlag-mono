@@ -315,8 +315,8 @@ impl ChallengeEntry {
             trace!("adding travel time => {points}");
         }
         // zkaff / zoneable points
-        match self.kind {
-            ZKaff => {
+        match (self.kind, zone_zoneables) {
+            (ZKaff, _) => {
                 if self.dead_end {
                     points += config.zkaff_points_for_dead_end as i64;
                     trace!("adding dead end => {points}");
@@ -331,11 +331,9 @@ impl ChallengeEntry {
                     * config.zkaff_departures_multiplier) as i64;
                 trace!("adding departures points => {points}")
             }
-            Zoneable => {
-                if zone_zoneables {
-                    points += config.points_for_zoneable as i64;
-                    trace!("adding points for zoned zoneable => {points}")
-                }
+            (Zoneable, true) => {
+                points += config.points_for_zoneable as i64;
+                trace!("adding points for zoned zoneable => {points}")
             }
             _ => (),
         }
@@ -400,19 +398,20 @@ impl ChallengeEntry {
         let translation_insert = |context: &str, vals: Vec<(&str, String)>| -> Map {
             let mut map = HashMap::new();
             for (key, value) in vals {
-                if let Some(_) = map.insert(key.into(), value) {
+                if let Some(translated) = map.insert(key.into(), value) {
                     // prints error if key is already present, i.e. there's a translation but no
                     // original title override
                     error!(
                         "Wrong translation in challenge {} ({}),\
-                        translated {} {} exists, but {} does not.",
+                        translated {} {} exists ({}), but {} does not.",
                         id,
                         self.place
                             .clone()
                             .or(self.title.clone())
                             .unwrap_or("invalid".into()),
-                        key.clone(),
+                        key,
                         context,
+                        translated,
                         context
                     )
                 }
@@ -601,23 +600,23 @@ impl ChallengeEntry {
             title = title.replace("%z", format!("{}", z.contents.zone).as_str());
             title = title.replace("%s", format!("{}", z.contents.zone).as_str());
             for val in translated_titles.values_mut() {
-                val.replace("%z", format!("{}", z.contents.zone).as_str());
-                val.replace("%s", format!("{}", z.contents.zone).as_str());
+                *val = val.replace("%z", format!("{}", z.contents.zone).as_str());
+                *val = val.replace("%s", format!("{}", z.contents.zone).as_str());
             }
             description = description.replace("%z", format!("{}", z.contents.zone).as_str());
             description = description.replace("%s", format!("{}", z.contents.zone).as_str());
             for val in translated_descriptions.values_mut() {
-                val.replace("%z", format!("{}", z.contents.zone).as_str());
-                val.replace("%s", format!("{}", z.contents.zone).as_str());
+                *val = val.replace("%z", format!("{}", z.contents.zone).as_str());
+                *val = val.replace("%s", format!("{}", z.contents.zone).as_str());
             }
         }
         title = title.replace("%r", format!("{}", reps).as_str());
         for val in translated_titles.values_mut() {
-            val.replace("%r", format!("{}", reps).as_str());
+            *val = val.replace("%r", format!("{}", reps).as_str());
         }
         description = description.replace("%r", format!("{}", reps).as_str());
         for val in translated_descriptions.values_mut() {
-            val.replace("%r", format!("{}", reps).as_str());
+            *val = val.replace("%r", format!("{}", reps).as_str());
         }
 
         // generating challenge action

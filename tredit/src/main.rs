@@ -369,11 +369,11 @@ async fn main() {
             {
                 libtruinlag::commands::ResponseAction::SendState {
                     teams,
-                    events,
-                    game,
+                    events: _,
+                    game: _,
                 } => teams,
                 other => panic!(
-                    "received unexpected response when fetching teams: {:?}",
+                    "received unexpected response when fetching teams:\n{:?}\naborting",
                     other
                 ),
             };
